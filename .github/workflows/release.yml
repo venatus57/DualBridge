@@ -1,7 +1,7 @@
 name: Installers
 
-# - Pushing a tag like v0.2.0 builds the Windows .exe and macOS .dmg and
-#   attaches them to a draft GitHub Release.
+# - Pushing a tag like v0.2.0 creates a GitHub pre-release (notes from
+#   .github/release-notes.md) and attaches the Windows .exe and macOS .dmg.
 # - "Run workflow" (manual) and pull requests build the same installers and
 #   upload them as workflow artifacts, for testing before a release.
 
@@ -19,8 +19,27 @@ permissions:
   contents: write
 
 jobs:
+  # On a version tag, create the GitHub pre-release once, before the builds
+  # upload their installers to it (so the two builds don't race to create it).
+  release:
+    name: Create release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 ||
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --prerelease --title "DualBridge $GITHUB_REF_NAME" --notes-file .github/release-notes.md
+
   build:
     name: ${{ matrix.name }}
+    needs: release
+    # Runs on pull requests and manual runs too, where "release" is skipped.
+    if: ${{ !cancelled() && needs.release.result != 'failure' }}
     strategy:
       fail-fast: false
       matrix:
@@ -81,10 +100,7 @@ jobs:
           projectPath: app
           tagName: ${{ github.ref_name }}
           releaseName: DualBridge ${{ github.ref_name }}
-          releaseBody: |
-            Download **DualBridge_*_x64-setup.exe** for Windows or **DualBridge_*_universal.dmg** for macOS.
-            Builds are not code-signed yet: Windows SmartScreen and macOS Gatekeeper will warn the first time you run them.
-          releaseDraft: true
+          releaseDraft: false
           prerelease: true
           args: ${{ matrix.args }}
 
