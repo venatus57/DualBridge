@@ -45,14 +45,15 @@ controller it manages.
 
 HidHide only accepts configuration changes from an administrator process.
 DualBridge runs as a normal user, so it relaunches itself as a short elevated
-helper (`--hidhide-helper`, one UAC prompt) that runs the CLI and exits.
+helper (`--hidhide-helper`, one UAC prompt) that runs `HidHideCLI.exe`
+(shipped with the driver) and exits.
 HidHide remembers hidden devices across restarts, so this happens once per
 controller (and per USB port), not at every launch. Hidden controllers stay
 hidden when DualBridge closes; turning exclusive mode off shows them again.
 
 Games launched through Steam can also get a second virtual pad from Steam
 Input. If double input remains, turn off Steam Input for PlayStation
-controllers, or for that game. It is driven through `HidHideCLI.exe`, which ships with the driver.
+controllers, or for that game.
 
 TODO before 1.0: confirm HidHide's redistribution terms (the installer bundles
 it unmodified) and that its CLI flags (`--app-reg`, `--dev-hide`,
