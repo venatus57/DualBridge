@@ -32,7 +32,10 @@ For each of DualShock 4 (v1 / v2) and DualSense (and Edge if available):
 - [ ] Windows "Set up USB game controllers" (`joy.cpl`) shows an Xbox 360
       controller that follows the PlayStation controller.
 - [ ] A game using XInput works; vibration from the game reaches the controller.
-- [ ] With exclusive mode on, games no longer see the PlayStation controller.
+- [ ] With HidHide installed (exclusive mode is on by default), games no
+      longer see the PlayStation controller: in a game that supports both
+      kinds (Brawlhalla, for example) each player gets exactly one controller.
+- [ ] After closing DualBridge, the PlayStation controller is visible again.
 - [ ] The latency shown on the card stays well under 1 ms on average.
 
 ## Lighting

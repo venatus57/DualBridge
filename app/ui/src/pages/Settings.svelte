@@ -78,11 +78,15 @@
       </div>
       <Toggle
         label={t("settings.exclusive")}
-        hint={t("settings.exclusive.hint")}
-        checked={s.exclusive_mode}
+        hint={o.hidhide_installed ? t("settings.exclusive.hint") : t("settings.exclusive.needsHidHide")}
+        checked={s.exclusive_mode && o.hidhide_installed}
         disabled={!o.hidhide_installed}
         onchange={(v) => change(api.setPreferences({ exclusive_mode: v }))}
       />
+      {#if o.hidhide_error}
+        <p class="error small"><Icon name="alert" size={14} /> {t("settings.hidhide.error", { msg: o.hidhide_error })}</p>
+      {/if}
+      <p class="hint">{t("settings.steamTip")}</p>
     {:else if o?.platform === "macos"}
       <p class="muted">{t("settings.macos")}</p>
     {:else}
@@ -112,6 +116,12 @@
     display: flex;
     flex-direction: column;
     gap: 2px;
+  }
+  .error {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--bad);
   }
   .row button {
     display: inline-flex;

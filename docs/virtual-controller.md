@@ -40,8 +40,12 @@ Games that understand PlayStation controllers would otherwise see both the
 real controller and the virtual Xbox one. [HidHide](https://github.com/nefarius/HidHide)
 is a filter driver that hides chosen devices from every application except an
 allow list. DualBridge registers itself in that list, hides the controllers it
-manages while "exclusive mode" is on, and makes them visible again when it
-closes. It is driven through `HidHideCLI.exe`, which ships with the driver.
+manages while "exclusive mode" is on (the default whenever HidHide is
+installed), and makes them visible again when it closes.
+
+Games launched through Steam can also get a second virtual pad from Steam
+Input. If double input remains, turn off Steam Input for PlayStation
+controllers, or for that game. It is driven through `HidHideCLI.exe`, which ships with the driver.
 
 TODO before 1.0: confirm HidHide's redistribution terms (the installer bundles
 it unmodified) and that its CLI flags (`--app-reg`, `--dev-hide`,

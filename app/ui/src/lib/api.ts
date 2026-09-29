@@ -173,6 +173,7 @@ function createDemoApi(): Api {
         controllers: controllers(),
         virtual_status: "ready",
         hidhide_installed: false,
+        hidhide_error: null,
         platform: "windows",
         version: "0.1.0",
         demo: true,

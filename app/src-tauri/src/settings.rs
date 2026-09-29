@@ -19,7 +19,9 @@ pub struct Settings {
     pub minimize_to_tray: bool,
     /// Start hidden in the tray (useful with "start with Windows").
     pub start_minimized: bool,
-    /// Hide the physical controllers from games with HidHide (Windows).
+    /// Hide the physical controllers from games with HidHide (Windows), so
+    /// games don't see each controller twice. Only has an effect when
+    /// HidHide is installed.
     pub exclusive_mode: bool,
     /// Switch profiles automatically when a game listed in a profile is in
     /// the foreground.
@@ -40,7 +42,7 @@ impl Default for Settings {
             first_run_done: false,
             minimize_to_tray: true,
             start_minimized: false,
-            exclusive_mode: false,
+            exclusive_mode: true,
             auto_profile_switch: true,
             profiles: vec![Profile::default()],
             assignments: BTreeMap::new(),

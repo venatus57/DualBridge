@@ -128,6 +128,8 @@ struct EngineShared {
     virtual_status: Mutex<BackendStatus>,
     /// Profile name selected by the foreground game.
     game_profile: Mutex<Option<String>>,
+    /// Last HidHide failure, shown in the settings.
+    hidhide_error: Mutex<Option<String>>,
 }
 
 pub struct Engine {
@@ -220,6 +222,7 @@ impl Engine {
             virtual_backend: Mutex::new(virtual_backend),
             virtual_status: Mutex::new(BackendStatus::Unsupported),
             game_profile: Mutex::new(None),
+            hidhide_error: Mutex::new(None),
         });
         let status = shared.virtual_backend.lock().unwrap().status();
         *shared.virtual_status.lock().unwrap() = status;
@@ -281,9 +284,8 @@ impl Engine {
                     ) {
                         let _ = links.rumble.controller.set(c.clone());
                     }
-                    if exclusive && !self.demo {
-                        let path = info.path.clone();
-                        std::thread::spawn(move || hidhide::hide_devices(&[path]));
+                    if exclusive {
+                        self.set_hidden(vec![info.path.clone()], true);
                     }
                 }
                 ManagerEvent::Disconnected { info, .. } => {
@@ -294,6 +296,28 @@ impl Engine {
         }
         drop(manager);
         let _ = app.emit("device-events", &events);
+    }
+
+    /// Hides the controllers from games with HidHide (or shows them again),
+    /// so games don't see both the PlayStation controller and the virtual
+    /// Xbox one. Runs in the background because the CLI takes a moment.
+    fn set_hidden(&self, paths: Vec<String>, hidden: bool) {
+        if self.demo || paths.is_empty() || !hidhide::is_installed() {
+            return;
+        }
+        let shared = self.shared.clone();
+        std::thread::spawn(move || {
+            let result = if hidden {
+                hidhide::hide_devices(&paths)
+            } else {
+                hidhide::unhide_devices(&paths)
+            };
+            *shared.hidhide_error.lock().unwrap() = result.err();
+        });
+    }
+
+    pub fn hidhide_error(&self) -> Option<String> {
+        self.shared.hidhide_error.lock().unwrap().clone()
     }
 
     fn check_foreground(&self) {
@@ -448,7 +472,7 @@ impl Engine {
             (r, before != s.exclusive_mode, s.exclusive_mode)
         };
         self.apply_profiles();
-        if exclusive_changed && !self.demo {
+        if exclusive_changed {
             let paths: Vec<String> = self
                 .manager
                 .lock()
@@ -456,13 +480,7 @@ impl Engine {
                 .controllers()
                 .map(|(_, c)| c.info.path.clone())
                 .collect();
-            std::thread::spawn(move || {
-                if exclusive {
-                    hidhide::hide_devices(&paths)
-                } else {
-                    hidhide::unhide_devices(&paths)
-                }
-            });
+            self.set_hidden(paths, exclusive);
         }
         Ok(result)
     }
@@ -516,7 +534,7 @@ impl Engine {
         manager.shutdown();
         drop(manager);
         let exclusive = self.shared.settings.lock().unwrap().exclusive_mode;
-        if exclusive && !self.demo && !paths.is_empty() {
+        if exclusive && !self.demo && !paths.is_empty() && hidhide::is_installed() {
             let _ = hidhide::unhide_devices(&paths);
         }
     }

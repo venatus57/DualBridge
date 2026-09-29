@@ -6,8 +6,9 @@
 ;
 ; - ViGEmBus (BSD-3-Clause, Nefarius Software Solutions): virtual Xbox
 ;   controller, needed for games to see the controller.
-; - HidHide (Nefarius Software Solutions): optional "exclusive mode" that hides
-;   the physical controller from games so they don't see it twice.
+; - HidHide (Nefarius Software Solutions): hides the physical controller from
+;   games so they don't see it twice (DualBridge turns this on by default
+;   when HidHide is installed).
 
 !macro DUALBRIDGE_INSTALL_VIGEMBUS
   ReadRegStr $0 HKLM "SYSTEM\CurrentControlSet\Services\ViGEmBus" "ImagePath"
@@ -27,9 +28,9 @@
   ${If} $0 == ""
   ${AndIf} ${FileExists} "$INSTDIR\drivers\HidHide_Setup.exe"
     ${If} $LANGUAGE == 1036
-      MessageBox MB_YESNO|MB_ICONQUESTION "Installer aussi HidHide (recommandé) ?$\r$\n$\r$\nIl évite que certains jeux voient votre manette en double. Un redémarrage peut être nécessaire." /SD IDNO IDNO dualbridge_skip_hidhide
+      MessageBox MB_YESNO|MB_ICONQUESTION "Installer aussi HidHide (fortement recommandé) ?$\r$\n$\r$\nSans lui, certains jeux (par exemple Brawlhalla) voient votre manette en double : la manette PlayStation ET la manette Xbox créée par DualBridge. Un redémarrage peut être nécessaire." /SD IDNO IDNO dualbridge_skip_hidhide
     ${Else}
-      MessageBox MB_YESNO|MB_ICONQUESTION "Also install HidHide (recommended)?$\r$\n$\r$\nIt stops some games from seeing your controller twice. A restart may be required." /SD IDNO IDNO dualbridge_skip_hidhide
+      MessageBox MB_YESNO|MB_ICONQUESTION "Also install HidHide (strongly recommended)?$\r$\n$\r$\nWithout it, some games (Brawlhalla, for example) see your controller twice: the PlayStation controller AND the Xbox controller made by DualBridge. A restart may be required." /SD IDNO IDNO dualbridge_skip_hidhide
     ${EndIf}
     ExecWait '"$INSTDIR\drivers\HidHide_Setup.exe"' $1
     dualbridge_skip_hidhide:

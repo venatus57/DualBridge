@@ -58,6 +58,15 @@
               <button onclick={refreshOverview}>{t("welcome.step2.recheck")}</button>
             </div>
           {/if}
+          {#if o.hidhide_installed}
+            <p class="status ok"><Icon name="check" size={20} /> {t("welcome.step2.double.ok")}</p>
+          {:else}
+            <p class="muted">{t("welcome.step2.double.missing")}</p>
+            <div class="row">
+              <button class="primary" onclick={() => api.installDriver("hidhide")}>{t("welcome.step2.double.install")}</button>
+              <button onclick={refreshOverview}>{t("welcome.step2.recheck")}</button>
+            </div>
+          {/if}
         {:else}
           <p class="muted">{t("welcome.step2.macos")}</p>
         {/if}

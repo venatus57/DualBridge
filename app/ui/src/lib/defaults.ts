@@ -61,7 +61,7 @@ export function defaultSettings(): Settings {
     first_run_done: false,
     minimize_to_tray: true,
     start_minimized: false,
-    exclusive_mode: false,
+    exclusive_mode: true,
     auto_profile_switch: true,
     profiles: [defaultProfile()],
     assignments: {},

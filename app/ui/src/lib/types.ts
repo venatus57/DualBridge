@@ -177,6 +177,7 @@ export interface Overview {
   controllers: ControllerView[];
   virtual_status: BackendStatus;
   hidhide_installed: boolean;
+  hidhide_error: string | null;
   platform: Platform;
   version: string;
   demo: boolean;
