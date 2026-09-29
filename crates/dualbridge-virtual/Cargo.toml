@@ -1,0 +1,16 @@
+[package]
+name = "dualbridge-virtual"
+description = "Virtual controller output backends for DualBridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+dualbridge-core.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+vigem-client = { version = "0.1.4", features = ["unstable_xtarget_notification"] }

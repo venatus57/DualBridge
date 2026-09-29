@@ -1,0 +1,220 @@
+//! Keeps track of connected controllers and their slots.
+//!
+//! Call [`ControllerManager::poll`] periodically (about once a second) from a
+//! background thread: it notices new and removed controllers and starts or
+//! stops their I/O threads. Slots are stable: a controller that reconnects
+//! gets its previous slot back if it is still free.
+
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use dualbridge_core::output::OutputState;
+use serde::Serialize;
+
+use crate::runtime::{ControllerHandle, ControllerShared, InputSink};
+use crate::{DeviceInfo, HidBackend, HidResult};
+
+/// Maximum number of controllers handled at once.
+pub const MAX_SLOTS: usize = 8;
+
+/// Something that changed during a [`ControllerManager::poll`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum ManagerEvent {
+    /// `slot` is 1-based.
+    Connected {
+        slot: u8,
+        info: DeviceInfo,
+    },
+    Disconnected {
+        slot: u8,
+        info: DeviceInfo,
+    },
+    /// No free slot for this controller.
+    NoFreeSlot {
+        info: DeviceInfo,
+    },
+    /// The controller was found but could not be opened.
+    OpenFailed {
+        info: DeviceInfo,
+        error: String,
+    },
+}
+
+/// Builds what a new controller needs: the sink for its input reports and its
+/// first output state (lighting). Called with the 1-based slot number.
+pub trait ControllerFactory: Send {
+    fn create(&mut self, info: &DeviceInfo, slot: u8) -> (Box<dyn InputSink>, OutputState);
+}
+
+impl<F> ControllerFactory for F
+where
+    F: FnMut(&DeviceInfo, u8) -> (Box<dyn InputSink>, OutputState) + Send,
+{
+    fn create(&mut self, info: &DeviceInfo, slot: u8) -> (Box<dyn InputSink>, OutputState) {
+        self(info, slot)
+    }
+}
+
+struct Slot {
+    handle: ControllerHandle,
+}
+
+pub struct ControllerManager<B: HidBackend> {
+    backend: B,
+    factory: Box<dyn ControllerFactory>,
+    slots: [Option<Slot>; MAX_SLOTS],
+    /// Last slot index used by each controller identity.
+    remembered: HashMap<String, usize>,
+    /// Paths that failed to open, so we don't retry (and report) every poll.
+    failed: HashMap<String, u32>,
+}
+
+impl<B: HidBackend> ControllerManager<B> {
+    pub fn new(backend: B, factory: impl ControllerFactory + 'static) -> Self {
+        ControllerManager {
+            backend,
+            factory: Box::new(factory),
+            slots: Default::default(),
+            remembered: HashMap::new(),
+            failed: HashMap::new(),
+        }
+    }
+
+    /// Detects connected and disconnected controllers.
+    pub fn poll(&mut self) -> HidResult<Vec<ManagerEvent>> {
+        let mut events = Vec::new();
+        let devices = self.backend.enumerate()?;
+
+        // Drop controllers whose threads ended or that are no longer listed.
+        for i in 0..MAX_SLOTS {
+            let gone = match &self.slots[i] {
+                Some(s) => {
+                    let shared = s.handle.shared();
+                    !shared.is_connected() || !devices.iter().any(|d| d.path == shared.info.path)
+                }
+                None => false,
+            };
+            if gone {
+                let slot = self.slots[i].take().unwrap();
+                let info = slot.handle.shared().info.clone();
+                slot.handle.stop();
+                events.push(ManagerEvent::Disconnected {
+                    slot: i as u8 + 1,
+                    info,
+                });
+            }
+        }
+        self.failed
+            .retain(|path, _| devices.iter().any(|d| &d.path == path));
+
+        for info in devices {
+            let active = self.slots.iter().flatten().any(|s| {
+                let i = &s.handle.shared().info;
+                // The same controller on USB and Bluetooth at once: keep the first.
+                i.path == info.path || i.identity() == info.identity()
+            });
+            if active {
+                continue;
+            }
+            // Retry a failing device only every few polls.
+            if let Some(n) = self.failed.get_mut(&info.path) {
+                *n += 1;
+                if *n % 5 != 0 {
+                    continue;
+                }
+            }
+            let Some(index) = self.pick_slot(info.identity()) else {
+                events.push(ManagerEvent::NoFreeSlot { info });
+                continue;
+            };
+            let slot_number = index as u8 + 1;
+            let (sink, output) = self.factory.create(&info, slot_number);
+            match ControllerHandle::start(&mut self.backend, info.clone(), sink, output) {
+                Ok(handle) => {
+                    self.failed.remove(&info.path);
+                    self.remembered.insert(info.identity().to_string(), index);
+                    self.slots[index] = Some(Slot { handle });
+                    events.push(ManagerEvent::Connected {
+                        slot: slot_number,
+                        info,
+                    });
+                }
+                Err(e) => {
+                    let first_failure = !self.failed.contains_key(&info.path);
+                    self.failed.entry(info.path.clone()).or_insert(0);
+                    if first_failure {
+                        events.push(ManagerEvent::OpenFailed {
+                            info,
+                            error: e.to_string(),
+                        });
+                    }
+                }
+            }
+        }
+        Ok(events)
+    }
+
+    fn pick_slot(&self, identity: &str) -> Option<usize> {
+        if let Some(&i) = self.remembered.get(identity) {
+            if self.slots[i].is_none() {
+                return Some(i);
+            }
+        }
+        // Prefer slots nobody else remembers, so everyone keeps their number.
+        let free = |i: &usize| self.slots[*i].is_none();
+        let reserved = |i: &usize| self.remembered.values().any(|r| r == i);
+        (0..MAX_SLOTS)
+            .filter(free)
+            .find(|i| !reserved(i))
+            .or_else(|| (0..MAX_SLOTS).find(free))
+    }
+
+    /// Connected controllers with their 1-based slot numbers.
+    pub fn controllers(&self) -> impl Iterator<Item = (u8, &Arc<ControllerShared>)> {
+        self.slots
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| s.as_ref().map(|s| (i as u8 + 1, s.handle.shared())))
+    }
+
+    /// The controller in a 1-based slot.
+    pub fn get(&self, slot: u8) -> Option<&Arc<ControllerShared>> {
+        let i = (slot as usize).checked_sub(1)?;
+        self.slots.get(i)?.as_ref().map(|s| s.handle.shared())
+    }
+
+    /// Swaps two 1-based slots (either may be empty). Returns `false` if a slot
+    /// number is out of range.
+    pub fn swap_slots(&mut self, a: u8, b: u8) -> bool {
+        let (Some(a), Some(b)) = ((a as usize).checked_sub(1), (b as usize).checked_sub(1)) else {
+            return false;
+        };
+        if a >= MAX_SLOTS || b >= MAX_SLOTS {
+            return false;
+        }
+        self.slots.swap(a, b);
+        for (i, s) in self.slots.iter().enumerate() {
+            if let Some(s) = s {
+                let id = s.handle.shared().info.identity().to_string();
+                self.remembered.insert(id, i);
+            }
+        }
+        true
+    }
+
+    /// Stops every controller.
+    pub fn shutdown(&mut self) {
+        for s in self.slots.iter_mut() {
+            if let Some(s) = s.take() {
+                s.handle.stop();
+            }
+        }
+    }
+}
+
+impl<B: HidBackend> Drop for ControllerManager<B> {
+    fn drop(&mut self) {
+        self.shutdown();
+    }
+}
