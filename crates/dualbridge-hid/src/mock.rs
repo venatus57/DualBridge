@@ -11,6 +11,7 @@ use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
+use dualbridge_core::calibration::{feature_report_id, feature_report_len};
 use dualbridge_core::device::{PID_DS4_V2, PID_DUALSENSE, PID_DUALSENSE_EDGE, SONY_VID};
 use dualbridge_core::{Model, Transport};
 
@@ -24,6 +25,9 @@ struct MockState {
     features: HashMap<u8, Vec<u8>>,
     open_count: usize,
     max_opens: Option<usize>,
+    /// Switched off but still listed, like a Bluetooth controller on Windows:
+    /// reads time out and feature requests fail.
+    silent: bool,
 }
 
 struct MockShared {
@@ -79,10 +83,19 @@ impl MockController {
         self.shared.cond.notify_all();
     }
 
-    /// Plugs the device back in.
+    /// Plugs the device back in (or switches it back on).
     pub fn reconnect(&self) {
         let mut s = self.shared.state.lock().unwrap();
         s.connected = true;
+        s.silent = false;
+        s.reports.clear();
+    }
+
+    /// Simulates a controller switched off while its device stays listed and
+    /// open (what Windows often does with Bluetooth controllers).
+    pub fn go_silent(&self) {
+        let mut s = self.shared.state.lock().unwrap();
+        s.silent = true;
         s.reports.clear();
     }
 
@@ -125,10 +138,17 @@ impl MockBackend {
             model,
             transport,
         };
+        // Answer the calibration request like a real controller would.
+        let mut calibration = vec![0u8; feature_report_len(model, transport)];
+        calibration[0] = feature_report_id(model, transport);
+        if transport == Transport::Bluetooth {
+            dualbridge_core::crc::sign(dualbridge_core::crc::SEED_FEATURE, &mut calibration);
+        }
         let shared = Arc::new(MockShared {
             info,
             state: Mutex::new(MockState {
                 connected: true,
+                features: HashMap::from([(calibration[0], calibration)]),
                 ..MockState::default()
             }),
             cond: Condvar::new(),
@@ -187,10 +207,15 @@ impl HidDevice for MockDevice {
         let (mut s, _) = self
             .shared
             .cond
-            .wait_timeout_while(s, timeout, |s| s.connected && s.reports.is_empty())
+            .wait_timeout_while(s, timeout, |s| {
+                s.connected && (s.silent || s.reports.is_empty())
+            })
             .unwrap();
         if !s.connected {
             return Err(HidError::Disconnected);
+        }
+        if s.silent {
+            return Ok(0);
         }
         match s.reports.pop_front() {
             Some(r) => {
@@ -216,6 +241,9 @@ impl HidDevice for MockDevice {
         let s = self.shared.state.lock().unwrap();
         if !s.connected {
             return Err(HidError::Disconnected);
+        }
+        if s.silent {
+            return Err(HidError::Other("device does not answer".into()));
         }
         let r = s
             .features

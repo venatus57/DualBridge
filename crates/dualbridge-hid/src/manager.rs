@@ -2,8 +2,9 @@
 //!
 //! Call [`ControllerManager::poll`] periodically (about once a second) from a
 //! background thread: it notices new and removed controllers and starts or
-//! stops their I/O threads. Slots are stable: a controller that reconnects
-//! gets its previous slot back if it is still free.
+//! stops their I/O threads. Slots stay packed: when a controller leaves, the
+//! ones after it move down (controller 3 becomes 2), and a new controller
+//! takes the next number.
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -64,8 +65,6 @@ pub struct ControllerManager<B: HidBackend> {
     backend: B,
     factory: Box<dyn ControllerFactory>,
     slots: [Option<Slot>; MAX_SLOTS],
-    /// Last slot index used by each controller identity.
-    remembered: HashMap<String, usize>,
     /// Paths that failed to open, so we don't retry (and report) every poll.
     failed: HashMap<String, u32>,
 }
@@ -76,7 +75,6 @@ impl<B: HidBackend> ControllerManager<B> {
             backend,
             factory: Box::new(factory),
             slots: Default::default(),
-            remembered: HashMap::new(),
             failed: HashMap::new(),
         }
     }
@@ -87,6 +85,7 @@ impl<B: HidBackend> ControllerManager<B> {
         let devices = self.backend.enumerate()?;
 
         // Drop controllers whose threads ended or that are no longer listed.
+        let mut removed = false;
         for i in 0..MAX_SLOTS {
             let gone = match &self.slots[i] {
                 Some(s) => {
@@ -99,11 +98,15 @@ impl<B: HidBackend> ControllerManager<B> {
                 let slot = self.slots[i].take().unwrap();
                 let info = slot.handle.shared().info.clone();
                 slot.handle.stop();
+                removed = true;
                 events.push(ManagerEvent::Disconnected {
                     slot: i as u8 + 1,
                     info,
                 });
             }
+        }
+        if removed {
+            self.compact();
         }
         self.failed
             .retain(|path, _| devices.iter().any(|d| &d.path == path));
@@ -124,7 +127,7 @@ impl<B: HidBackend> ControllerManager<B> {
                     continue;
                 }
             }
-            let Some(index) = self.pick_slot(info.identity()) else {
+            let Some(index) = self.slots.iter().position(Option::is_none) else {
                 events.push(ManagerEvent::NoFreeSlot { info });
                 continue;
             };
@@ -133,7 +136,6 @@ impl<B: HidBackend> ControllerManager<B> {
             match ControllerHandle::start(&mut self.backend, info.clone(), sink, output) {
                 Ok(handle) => {
                     self.failed.remove(&info.path);
-                    self.remembered.insert(info.identity().to_string(), index);
                     self.slots[index] = Some(Slot { handle });
                     events.push(ManagerEvent::Connected {
                         slot: slot_number,
@@ -155,19 +157,12 @@ impl<B: HidBackend> ControllerManager<B> {
         Ok(events)
     }
 
-    fn pick_slot(&self, identity: &str) -> Option<usize> {
-        if let Some(&i) = self.remembered.get(identity) {
-            if self.slots[i].is_none() {
-                return Some(i);
-            }
+    /// Moves controllers down to fill the gaps left by disconnected ones.
+    fn compact(&mut self) {
+        let remaining: Vec<Slot> = self.slots.iter_mut().filter_map(Option::take).collect();
+        for (i, slot) in remaining.into_iter().enumerate() {
+            self.slots[i] = Some(slot);
         }
-        // Prefer slots nobody else remembers, so everyone keeps their number.
-        let free = |i: &usize| self.slots[*i].is_none();
-        let reserved = |i: &usize| self.remembered.values().any(|r| r == i);
-        (0..MAX_SLOTS)
-            .filter(free)
-            .find(|i| !reserved(i))
-            .or_else(|| (0..MAX_SLOTS).find(free))
     }
 
     /// Connected controllers with their 1-based slot numbers.
@@ -184,8 +179,8 @@ impl<B: HidBackend> ControllerManager<B> {
         self.slots.get(i)?.as_ref().map(|s| s.handle.shared())
     }
 
-    /// Swaps two 1-based slots (either may be empty). Returns `false` if a slot
-    /// number is out of range.
+    /// Swaps two 1-based slots. Returns `false` if a slot number is out of
+    /// range.
     pub fn swap_slots(&mut self, a: u8, b: u8) -> bool {
         let (Some(a), Some(b)) = ((a as usize).checked_sub(1), (b as usize).checked_sub(1)) else {
             return false;
@@ -194,12 +189,8 @@ impl<B: HidBackend> ControllerManager<B> {
             return false;
         }
         self.slots.swap(a, b);
-        for (i, s) in self.slots.iter().enumerate() {
-            if let Some(s) = s {
-                let id = s.handle.shared().info.identity().to_string();
-                self.remembered.insert(id, i);
-            }
-        }
+        // Swapping with an empty slot must not leave a gap.
+        self.compact();
         true
     }
 

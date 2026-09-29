@@ -250,7 +250,7 @@ const en = {
   "welcome.step4.text": "This is the default lightbar color. You can change it any time in Lighting.",
   "welcome.step4.slot": "A different color per controller",
   "welcome.step5.title": "All set!",
-  "welcome.step5.text": "DualBridge keeps running in the notification area. Open it any time to change colors, buttons or profiles.",
+  "welcome.step5.text": "DualBridge starts with your computer and runs in the notification area. Open it any time to change colors, buttons or profiles (you can turn off starting with the computer in Settings).",
 
   "common.saved": "Saved",
   "common.error": "Error: {msg}",
@@ -509,7 +509,7 @@ const fr: Record<Key, string> = {
   "welcome.step4.text": "C'est la couleur par défaut de la barre lumineuse. Vous pourrez la changer à tout moment dans Lumière.",
   "welcome.step4.slot": "Une couleur différente par manette",
   "welcome.step5.title": "C'est prêt !",
-  "welcome.step5.text": "DualBridge reste actif dans la zone de notification. Ouvrez-le quand vous voulez pour changer les couleurs, les boutons ou les profils.",
+  "welcome.step5.text": "DualBridge démarre avec votre ordinateur et reste actif dans la zone de notification. Ouvrez-le quand vous voulez pour changer les couleurs, les boutons ou les profils (le démarrage automatique se désactive dans Réglages).",
 
   "common.saved": "Enregistré",
   "common.error": "Erreur : {msg}",

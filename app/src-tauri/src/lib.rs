@@ -92,6 +92,17 @@ pub fn run() {
             engine.spawn(app.handle().clone());
 
             let settings = engine.settings();
+            // Start with the computer by default (once: after that the user's
+            // choice in Settings is kept).
+            if !settings.autostart_configured && !demo {
+                use tauri_plugin_autostart::ManagerExt;
+                if app.autolaunch().enable().is_ok() {
+                    let _ = engine.update_settings(|s| {
+                        s.autostart_configured = true;
+                        Ok(())
+                    });
+                }
+            }
             let minimized = std::env::args().any(|a| a == "--minimized")
                 || (settings.start_minimized && settings.first_run_done);
             app.manage(engine);

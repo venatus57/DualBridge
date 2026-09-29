@@ -20,6 +20,9 @@ pub struct Settings {
     pub minimize_to_tray: bool,
     /// Start hidden in the tray (useful with "start with Windows").
     pub start_minimized: bool,
+    /// "Start with the computer" was turned on by default once already, so
+    /// the user's later choice is kept.
+    pub autostart_configured: bool,
     /// Hide the physical controllers from games with HidHide (Windows), so
     /// games don't see each controller twice. Only has an effect when
     /// HidHide is installed.
@@ -49,6 +52,7 @@ impl Default for Settings {
             first_run_done: false,
             minimize_to_tray: true,
             start_minimized: false,
+            autostart_configured: false,
             exclusive_mode: true,
             hidden_devices: BTreeSet::new(),
             auto_profile_switch: true,

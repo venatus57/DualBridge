@@ -141,39 +141,89 @@ fn single_handle_fallback_writes_from_input_thread() {
 }
 
 #[test]
-fn hotplug_and_stable_slots() {
+fn hotplug_and_packed_slots() {
     let backend = MockBackend::default();
     let a = backend.add(Model::DualSense, Transport::Usb, "a");
     let b = backend.add(Model::DualShock4, Transport::Usb, "b");
+    let c = backend.add(Model::DualSenseEdge, Transport::Bluetooth, "c");
+    let (mut m, _rx) = manager(&backend);
+    assert_eq!(connected_slots(&m.poll().unwrap()), vec![1, 2, 3]);
+
+    // Controller 2 leaves: controller 3 becomes 2.
+    b.disconnect();
+    let events = m.poll().unwrap();
+    assert!(matches!(
+        events[0],
+        ManagerEvent::Disconnected { slot: 2, .. }
+    ));
+    assert_eq!(m.controllers().count(), 2);
+    assert_eq!(m.get(2).unwrap().info.serial.as_deref(), Some("c"));
+    assert!(m.get(3).is_none());
+
+    // It comes back as the next number.
+    b.reconnect();
+    assert_eq!(connected_slots(&m.poll().unwrap()), vec![3]);
+
+    assert!(m.swap_slots(1, 3));
+    assert_eq!(m.get(1).unwrap().info.serial.as_deref(), Some("b"));
+    assert_eq!(m.get(3).unwrap().info.serial.as_deref(), Some("a"));
+    assert!(!m.swap_slots(0, 9));
+    // Swapping with an empty slot doesn't leave a gap.
+    assert!(m.swap_slots(1, 5));
+    assert_eq!(
+        m.controllers().map(|(slot, _)| slot).collect::<Vec<_>>(),
+        vec![1, 2, 3]
+    );
+    drop((a, c));
+}
+
+#[test]
+fn switched_off_bluetooth_controller_is_removed() {
+    let backend = MockBackend::default();
+    let a = backend.add(Model::DualSense, Transport::Bluetooth, "a");
+    let _b = backend.add(Model::DualShock4, Transport::Bluetooth, "b");
     let (mut m, _rx) = manager(&backend);
     assert_eq!(connected_slots(&m.poll().unwrap()), vec![1, 2]);
 
-    a.disconnect();
+    // Controller 1 is switched off but Windows still lists it.
+    a.go_silent();
+    let start = std::time::Instant::now();
+    wait_until(|| !m.get(1).unwrap().is_connected());
+    assert!(start.elapsed() >= Duration::from_secs(2));
     let events = m.poll().unwrap();
     assert!(matches!(
         events[0],
         ManagerEvent::Disconnected { slot: 1, .. }
     ));
+    // The one left becomes controller 1, and the silent one is not re-added.
+    assert_eq!(m.get(1).unwrap().info.serial.as_deref(), Some("b"));
     assert_eq!(m.controllers().count(), 1);
+    assert!(connected_slots(&m.poll().unwrap()).is_empty());
 
-    // A new controller does not take a's remembered slot...
-    let c = backend.add(Model::DualSenseEdge, Transport::Bluetooth, "c");
-    assert_eq!(connected_slots(&m.poll().unwrap()), vec![3]);
-    // ...so a gets slot 1 back.
+    // Switched back on: it comes back as controller 2.
     a.reconnect();
-    assert_eq!(connected_slots(&m.poll().unwrap()), vec![1]);
+    let mut slots = Vec::new();
+    for _ in 0..10 {
+        slots = connected_slots(&m.poll().unwrap());
+        if !slots.is_empty() {
+            break;
+        }
+    }
+    assert_eq!(slots, vec![2]);
+}
 
-    assert!(m.swap_slots(1, 3));
-    assert_eq!(m.get(1).unwrap().info.serial.as_deref(), Some("c"));
-    assert_eq!(m.get(3).unwrap().info.serial.as_deref(), Some("a"));
-    assert!(!m.swap_slots(0, 9));
-
-    // After a swap, reconnecting keeps the new slot.
-    a.disconnect();
+#[test]
+fn idle_controller_that_still_answers_stays() {
+    let backend = MockBackend::default();
+    let pad = backend.add(Model::DualSense, Transport::Bluetooth, "a");
+    let (mut m, _rx) = manager(&backend);
     m.poll().unwrap();
-    a.reconnect();
-    assert_eq!(connected_slots(&m.poll().unwrap()), vec![3]);
-    drop((b, c));
+    // No input reports for longer than the silence timeout, but the
+    // controller answers the liveness check.
+    std::thread::sleep(Duration::from_millis(2600));
+    assert!(m.get(1).unwrap().is_connected());
+    assert!(m.poll().unwrap().is_empty());
+    drop(pad);
 }
 
 #[test]

@@ -108,6 +108,7 @@ export interface Settings {
   first_run_done: boolean;
   minimize_to_tray: boolean;
   start_minimized: boolean;
+  autostart_configured: boolean;
   exclusive_mode: boolean;
   hidden_devices: string[];
   auto_profile_switch: boolean;

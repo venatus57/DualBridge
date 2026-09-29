@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 use dualbridge_core::calibration::{self, Calibration};
 use dualbridge_core::input::InputParser;
 use dualbridge_core::output::{OutputBuilder, OutputState};
-use dualbridge_core::ControllerState;
+use dualbridge_core::{ControllerState, Transport};
 
 use crate::latency::LatencyMeter;
 use crate::{DeviceInfo, HidBackend, HidDevice, HidError, HidResult};
@@ -28,6 +28,13 @@ use crate::{DeviceInfo, HidBackend, HidDevice, HidError, HidResult};
 const READ_TIMEOUT_MS: i32 = 100;
 /// Largest input report we expect (padding included).
 const READ_BUF_LEN: usize = 128;
+/// Controllers stream reports continuously (about 250 per second), so this
+/// long without one means something is wrong. A Bluetooth controller that is
+/// switched off often keeps its handle "open" on Windows: reads just time out
+/// instead of failing. After this silence we check whether it still answers.
+const SILENCE_TIMEOUT: Duration = Duration::from_secs(2);
+/// How long a liveness check waits for an input report.
+const PROBE_READ_MS: i32 = 1000;
 
 /// Receives every parsed input report, on the input thread.
 ///
@@ -119,6 +126,15 @@ impl ControllerHandle {
     ) -> HidResult<ControllerHandle> {
         let mut reader = backend.open(&info)?;
         let calibration = read_calibration(reader.as_mut(), &info);
+        // A Bluetooth controller that was switched off can still be listed
+        // (and opened) for a while: only take it if it answers.
+        if info.transport == Transport::Bluetooth
+            && calibration.is_none()
+            && !answers_input(reader.as_mut())
+        {
+            return Err(HidError::Disconnected);
+        }
+        let calibration = calibration.unwrap_or_default();
         let writer = backend.open(&info).ok();
 
         let shared = Arc::new(ControllerShared {
@@ -193,15 +209,29 @@ impl Drop for ControllerHandle {
     }
 }
 
-fn read_calibration(dev: &mut dyn HidDevice, info: &DeviceInfo) -> Calibration {
+/// Reads the calibration feature report. `None` if the controller didn't
+/// answer at all; `Some(default)` if it answered with unusable data.
+fn read_calibration(dev: &mut dyn HidDevice, info: &DeviceInfo) -> Option<Calibration> {
     let mut buf = [0u8; 64];
     let len = calibration::feature_report_len(info.model, info.transport);
     buf[0] = calibration::feature_report_id(info.model, info.transport);
-    match dev.get_feature_report(&mut buf[..len]) {
-        Ok(n) => Calibration::from_feature_report(info.model, info.transport, &buf[..n])
-            .unwrap_or_default(),
-        Err(_) => Calibration::default(),
-    }
+    let n = dev.get_feature_report(&mut buf[..len]).ok()?;
+    Some(
+        Calibration::from_feature_report(info.model, info.transport, &buf[..n]).unwrap_or_default(),
+    )
+}
+
+/// `true` if the controller sends an input report within [`PROBE_READ_MS`].
+fn answers_input(dev: &mut dyn HidDevice) -> bool {
+    let mut buf = [0u8; READ_BUF_LEN];
+    matches!(dev.read_timeout(&mut buf, PROBE_READ_MS), Ok(n) if n > 0)
+}
+
+/// Checks a silent controller: it is alive if it answers a feature report
+/// request (which also switches Bluetooth controllers back to full reports)
+/// or sends an input report.
+fn still_alive(dev: &mut dyn HidDevice, info: &DeviceInfo) -> bool {
+    read_calibration(dev, info).is_some() || answers_input(dev)
 }
 
 fn input_loop(
@@ -215,6 +245,7 @@ fn input_loop(
     let mut builder = OutputBuilder::new(shared.info.model, shared.info.transport);
     let mut state = ControllerState::default();
     let mut buf = [0u8; READ_BUF_LEN];
+    let mut last_report = Instant::now();
 
     while !shared.stop.load(Ordering::Acquire) {
         if inline_writes {
@@ -231,11 +262,20 @@ fn input_loop(
         }
 
         let n = match dev.read_timeout(&mut buf, READ_TIMEOUT_MS) {
-            Ok(0) => continue,
+            Ok(0) => {
+                if last_report.elapsed() >= SILENCE_TIMEOUT {
+                    if !still_alive(dev.as_mut(), &shared.info) {
+                        break;
+                    }
+                    last_report = Instant::now();
+                }
+                continue;
+            }
             Ok(n) => n,
             Err(_) => break,
         };
         let arrived = Instant::now();
+        last_report = arrived;
         if parser.parse(&buf[..n], &mut state).is_err() {
             shared.latency.record_error();
             continue;
