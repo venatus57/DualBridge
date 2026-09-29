@@ -1,16 +1,11 @@
 //! A scriptable HID backend for tests and UI development without hardware.
 //!
-//! ```
-//! use dualbridge_core::{Model, Transport};
-//! use dualbridge_hid::mock::MockBackend;
-//! use dualbridge_hid::HidBackend;
-//!
-//! let mut backend = MockBackend::default();
-//! let pad = backend.add(Model::DualSense, Transport::Usb, "AA:BB");
-//! assert_eq!(backend.enumerate().unwrap().len(), 1);
-//! pad.disconnect();
-//! assert!(backend.enumerate().unwrap().is_empty());
-//! ```
+//! [`MockBackend::add`] plugs in a controller and returns a [`MockController`]
+//! handle to push input reports, inspect written output reports, and
+//! disconnect or reconnect it. See `tests/manager.rs` for full examples.
+//
+// The usage example lives in the unit tests below rather than in a doctest:
+// rustdoc fails to link doctests that pull in hidapi on Windows (MSVC).
 
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Condvar, Mutex};
@@ -229,5 +224,24 @@ impl HidDevice for MockDevice {
         let n = r.len().min(buf.len());
         buf[..n].copy_from_slice(&r[..n]);
         Ok(n)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn plug_and_unplug() {
+        let mut backend = MockBackend::default();
+        let pad = backend.add(Model::DualSense, Transport::Usb, "AA:BB");
+        assert_eq!(backend.enumerate().unwrap().len(), 1);
+        pad.disconnect();
+        assert!(backend.enumerate().unwrap().is_empty());
+        pad.reconnect();
+        assert_eq!(
+            backend.enumerate().unwrap()[0].serial.as_deref(),
+            Some("AA:BB")
+        );
     }
 }
