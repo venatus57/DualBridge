@@ -109,6 +109,7 @@ export interface Settings {
   minimize_to_tray: boolean;
   start_minimized: boolean;
   exclusive_mode: boolean;
+  hidden_devices: string[];
   auto_profile_switch: boolean;
   profiles: Profile[];
   assignments: Record<string, string>;

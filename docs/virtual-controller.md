@@ -39,9 +39,16 @@ the rest of the app.
 Games that understand PlayStation controllers would otherwise see both the
 real controller and the virtual Xbox one. [HidHide](https://github.com/nefarius/HidHide)
 is a filter driver that hides chosen devices from every application except an
-allow list. DualBridge registers itself in that list, hides the controllers it
-manages while "exclusive mode" is on (the default whenever HidHide is
-installed), and makes them visible again when it closes.
+allow list. While "exclusive mode" is on (the default whenever HidHide is
+installed), DualBridge registers itself in that list and hides each
+controller it manages.
+
+HidHide only accepts configuration changes from an administrator process.
+DualBridge runs as a normal user, so it relaunches itself as a short elevated
+helper (`--hidhide-helper`, one UAC prompt) that runs the CLI and exits.
+HidHide remembers hidden devices across restarts, so this happens once per
+controller (and per USB port), not at every launch. Hidden controllers stay
+hidden when DualBridge closes; turning exclusive mode off shows them again.
 
 Games launched through Steam can also get a second virtual pad from Steam
 Input. If double input remains, turn off Steam Input for PlayStation
@@ -49,7 +56,7 @@ controllers, or for that game. It is driven through `HidHideCLI.exe`, which ship
 
 TODO before 1.0: confirm HidHide's redistribution terms (the installer bundles
 it unmodified) and that its CLI flags (`--app-reg`, `--dev-hide`,
-`--dev-unhide`, `--cloak-on`) are unchanged in the latest release.
+`--dev-unhide`, `--cloak-on`) behave as expected on the bundled release.
 
 ## macOS
 

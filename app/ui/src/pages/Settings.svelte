@@ -83,6 +83,12 @@
         disabled={!o.hidhide_installed}
         onchange={(v) => change(api.setPreferences({ exclusive_mode: v }))}
       />
+      {#if o.hidhide_installed && s.exclusive_mode}
+        <div class="row">
+          <button onclick={async () => { await api.hideControllersNow(); setTimeout(refreshOverview, 3000); }}>{t("settings.hideNow")}</button>
+          <span class="hint">{t("settings.hideNow.hint")}</span>
+        </div>
+      {/if}
       {#if o.hidhide_error}
         <p class="error small"><Icon name="alert" size={14} /> {t("settings.hidhide.error", { msg: o.hidhide_error })}</p>
       {/if}

@@ -62,6 +62,7 @@ export function defaultSettings(): Settings {
     minimize_to_tray: true,
     start_minimized: false,
     exclusive_mode: true,
+    hidden_devices: [],
     auto_profile_switch: true,
     profiles: [defaultProfile()],
     assignments: {},

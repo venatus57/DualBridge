@@ -130,6 +130,20 @@ struct EngineShared {
     game_profile: Mutex<Option<String>>,
     /// Last HidHide failure, shown in the settings.
     hidhide_error: Mutex<Option<String>>,
+    hiding: Mutex<HidingState>,
+}
+
+/// Progress of HidHide changes, which need an elevated helper (UAC prompt).
+#[derive(Default)]
+struct HidingState {
+    /// An elevated helper is running.
+    busy: bool,
+    /// The user declined, or HidHide refused: don't prompt again on our own
+    /// until the user asks (toggle or "hide now" button).
+    blocked: bool,
+    /// Check again for connected controllers that still need hiding (some
+    /// may have connected while the helper was running).
+    recheck: bool,
 }
 
 pub struct Engine {
@@ -223,6 +237,7 @@ impl Engine {
             virtual_status: Mutex::new(BackendStatus::Unsupported),
             game_profile: Mutex::new(None),
             hidhide_error: Mutex::new(None),
+            hiding: Mutex::new(HidingState::default()),
         });
         let status = shared.virtual_backend.lock().unwrap().status();
         *shared.virtual_status.lock().unwrap() = status;
@@ -266,6 +281,10 @@ impl Engine {
     }
 
     fn poll_devices(&self, app: &AppHandle) {
+        let recheck = std::mem::take(&mut self.shared.hiding.lock().unwrap().recheck);
+        if recheck {
+            self.hide_connected(false);
+        }
         let events = match self.manager.lock().unwrap().poll() {
             Ok(e) => e,
             Err(_) => return,
@@ -275,6 +294,7 @@ impl Engine {
         }
         let exclusive = self.shared.settings.lock().unwrap().exclusive_mode;
         let manager = self.manager.lock().unwrap();
+        let mut to_hide = Vec::new();
         for event in &events {
             match event {
                 ManagerEvent::Connected { slot, info } => {
@@ -285,7 +305,7 @@ impl Engine {
                         let _ = links.rumble.controller.set(c.clone());
                     }
                     if exclusive {
-                        self.set_hidden(vec![info.path.clone()], true);
+                        to_hide.push(info.path.clone());
                     }
                 }
                 ManagerEvent::Disconnected { info, .. } => {
@@ -295,24 +315,78 @@ impl Engine {
             }
         }
         drop(manager);
+        self.change_hiding(to_hide, true, false);
         let _ = app.emit("device-events", &events);
     }
 
-    /// Hides the controllers from games with HidHide (or shows them again),
-    /// so games don't see both the PlayStation controller and the virtual
-    /// Xbox one. Runs in the background because the CLI takes a moment.
-    fn set_hidden(&self, paths: Vec<String>, hidden: bool) {
-        if self.demo || paths.is_empty() || !hidhide::is_installed() {
+    /// Hides every connected controller that isn't hidden yet. `force`
+    /// prompts even after the user declined earlier (explicit request).
+    pub fn hide_connected(&self, force: bool) {
+        let paths: Vec<String> = self
+            .manager
+            .lock()
+            .unwrap()
+            .controllers()
+            .map(|(_, c)| c.info.path.clone())
+            .collect();
+        self.change_hiding(paths, true, force);
+    }
+
+    /// Hides controllers from games with HidHide (or shows them again), so
+    /// games don't see both the PlayStation controller and the virtual Xbox
+    /// one. HidHide needs administrator rights, so this runs an elevated
+    /// helper (UAC prompt) in the background, and only for controllers whose
+    /// state actually changes: HidHide remembers hidden devices.
+    fn change_hiding(&self, paths: Vec<String>, hide: bool, force: bool) {
+        if self.demo || !hidhide::is_installed() {
             return;
         }
+        let paths: Vec<String> = {
+            let settings = self.shared.settings.lock().unwrap();
+            paths
+                .into_iter()
+                .filter(|p| settings.hidden_devices.contains(p) != hide)
+                .collect()
+        };
+        if paths.is_empty() {
+            return;
+        }
+        {
+            let mut h = self.shared.hiding.lock().unwrap();
+            if h.busy || (h.blocked && !force) {
+                return;
+            }
+            h.busy = true;
+            h.blocked = false;
+        }
         let shared = self.shared.clone();
+        let settings_path = self.settings_path.clone();
         std::thread::spawn(move || {
-            let result = if hidden {
-                hidhide::hide_devices(&paths)
+            let exe = std::env::current_exe()
+                .map(|p| p.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let cmds = if hide {
+                hidhide::hide_commands(&exe, &paths)
             } else {
-                hidhide::unhide_devices(&paths)
+                hidhide::unhide_commands(&paths)
             };
-            *shared.hidhide_error.lock().unwrap() = result.err();
+            let result = crate::elevate::run_hidhide_elevated(&cmds);
+            if result.is_ok() {
+                let mut settings = shared.settings.lock().unwrap();
+                for p in &paths {
+                    if hide {
+                        settings.hidden_devices.insert(p.clone());
+                    } else {
+                        settings.hidden_devices.remove(p);
+                    }
+                }
+                let _ = settings.save(&settings_path);
+            }
+            let mut h = shared.hiding.lock().unwrap();
+            h.busy = false;
+            h.blocked = result.is_err();
+            h.recheck = result.is_ok() && hide;
+            *shared.hidhide_error.lock().unwrap() = result.err().map(|e| e.to_string());
         });
     }
 
@@ -473,14 +547,20 @@ impl Engine {
         };
         self.apply_profiles();
         if exclusive_changed {
-            let paths: Vec<String> = self
-                .manager
-                .lock()
-                .unwrap()
-                .controllers()
-                .map(|(_, c)| c.info.path.clone())
-                .collect();
-            self.set_hidden(paths, exclusive);
+            if exclusive {
+                self.hide_connected(true);
+            } else {
+                let hidden: Vec<String> = self
+                    .shared
+                    .settings
+                    .lock()
+                    .unwrap()
+                    .hidden_devices
+                    .iter()
+                    .cloned()
+                    .collect();
+                self.change_hiding(hidden, false, true);
+            }
         }
         Ok(result)
     }
@@ -522,21 +602,12 @@ impl Engine {
         }
     }
 
-    /// Stops every controller (unplugging the virtual pads). In exclusive
-    /// mode the physical controllers are made visible again, so they keep
-    /// working in games while DualBridge is not running.
+    /// Stops every controller (unplugging the virtual pads). Hidden
+    /// controllers stay hidden: showing them again would need another UAC
+    /// prompt every time DualBridge closes. Turning exclusive mode off
+    /// makes them visible again.
     pub fn shutdown(&self) {
-        let mut manager = self.manager.lock().unwrap();
-        let paths: Vec<String> = manager
-            .controllers()
-            .map(|(_, c)| c.info.path.clone())
-            .collect();
-        manager.shutdown();
-        drop(manager);
-        let exclusive = self.shared.settings.lock().unwrap().exclusive_mode;
-        if exclusive && !self.demo && !paths.is_empty() && hidhide::is_installed() {
-            let _ = hidhide::unhide_devices(&paths);
-        }
+        self.manager.lock().unwrap().shutdown();
     }
 }
 

@@ -1,6 +1,6 @@
 //! App settings, saved as `settings.json` in the app's config directory.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use dualbridge_core::profile::Profile;
@@ -23,6 +23,9 @@ pub struct Settings {
     /// games don't see each controller twice. Only has an effect when
     /// HidHide is installed.
     pub exclusive_mode: bool,
+    /// Controllers (hidapi paths) DualBridge has hidden with HidHide. HidHide
+    /// remembers them, so they are only hidden once (one UAC prompt).
+    pub hidden_devices: BTreeSet<String>,
     /// Switch profiles automatically when a game listed in a profile is in
     /// the foreground.
     pub auto_profile_switch: bool,
@@ -43,6 +46,7 @@ impl Default for Settings {
             minimize_to_tray: true,
             start_minimized: false,
             exclusive_mode: true,
+            hidden_devices: BTreeSet::new(),
             auto_profile_switch: true,
             profiles: vec![Profile::default()],
             assignments: BTreeMap::new(),

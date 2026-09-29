@@ -2,6 +2,7 @@
 
 mod commands;
 mod demo;
+mod elevate;
 mod engine;
 mod foreground;
 mod settings;
@@ -13,6 +14,8 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::{AppHandle, Manager, WindowEvent};
 
 use crate::engine::Engine;
+
+pub use crate::elevate::helper_main;
 
 fn show_main_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
@@ -119,6 +122,7 @@ pub fn run() {
             commands::assign_profile,
             commands::rename_controller,
             commands::set_preferences,
+            commands::hide_controllers_now,
             commands::swap_slots,
             commands::identify_controller,
             commands::reset_latency,

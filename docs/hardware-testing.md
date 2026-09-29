@@ -35,7 +35,9 @@ For each of DualShock 4 (v1 / v2) and DualSense (and Edge if available):
 - [ ] With HidHide installed (exclusive mode is on by default), games no
       longer see the PlayStation controller: in a game that supports both
       kinds (Brawlhalla, for example) each player gets exactly one controller.
-- [ ] After closing DualBridge, the PlayStation controller is visible again.
+- [ ] Windows asks for administrator permission once when a new controller
+      connects, and not again on the next launch.
+- [ ] Turning exclusive mode off makes the PlayStation controller visible again.
 - [ ] The latency shown on the card stays well under 1 ms on average.
 
 ## Lighting

@@ -24,6 +24,7 @@ export interface Api {
   renameController(identity: string, name: string): Promise<Settings>;
   setPreferences(patch: PreferencesPatch): Promise<Settings>;
   swapSlots(a: number, b: number): Promise<boolean>;
+  hideControllersNow(): Promise<void>;
   identify(slot: number): Promise<boolean>;
   resetLatency(slot: number): Promise<void>;
   previewLighting(lighting: LightingConfig, slot: number, batteryPercent: number, durationMs: number, fps: number): Promise<string[]>;
@@ -44,6 +45,7 @@ const tauriApi: Api = {
   renameController: (identity, name) => invoke("rename_controller", { identity, name }),
   setPreferences: (patch) => invoke("set_preferences", { patch }),
   swapSlots: (a, b) => invoke("swap_slots", { a, b }),
+  hideControllersNow: () => invoke("hide_controllers_now"),
   identify: (slot) => invoke("identify_controller", { slot }),
   resetLatency: (slot) => invoke("reset_latency", { slot }),
   previewLighting: (lighting, slot, batteryPercent, durationMs, fps) =>
@@ -225,6 +227,7 @@ function createDemoApi(): Api {
     async identify() {
       return true;
     },
+    async hideControllersNow() {},
     async resetLatency() {},
     async previewLighting(lighting, slot, battery, durationMs, fps) {
       const frames = Math.max(1, Math.floor((durationMs * fps) / 1000));

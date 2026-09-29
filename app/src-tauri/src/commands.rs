@@ -139,6 +139,13 @@ pub fn set_preferences(engine: EngineState, patch: PreferencesPatch) -> Result<S
     Ok(engine.settings())
 }
 
+/// Hides the connected controllers from games now (asks for administrator
+/// permission if needed).
+#[tauri::command]
+pub fn hide_controllers_now(engine: EngineState) {
+    engine.hide_connected(true);
+}
+
 #[tauri::command]
 pub fn swap_slots(engine: EngineState, a: u8, b: u8) -> bool {
     engine.swap_slots(a, b)
