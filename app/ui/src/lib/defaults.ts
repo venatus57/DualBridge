@@ -67,6 +67,7 @@ export function defaultSettings(): Settings {
     profiles: [defaultProfile()],
     assignments: {},
     controller_names: {},
+    controller_lighting: {},
   };
 }
 

@@ -121,6 +121,7 @@ pub fn run() {
             commands::delete_profile,
             commands::assign_profile,
             commands::rename_controller,
+            commands::set_controller_lighting,
             commands::set_preferences,
             commands::hide_controllers_now,
             commands::swap_slots,

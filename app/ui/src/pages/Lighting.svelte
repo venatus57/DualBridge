@@ -9,11 +9,49 @@
   import { hsv } from "../lib/color";
   import { SLOT_COLORS } from "../lib/defaults";
   import { t, type Key } from "../lib/i18n.svelte";
-  import { editedProfile, saveProfileSoon } from "../lib/store.svelte";
-  import type { Brightness, Effect, EffectType, MicLedMode, Rgb } from "../lib/types";
+  import {
+    app,
+    change,
+    editedProfile,
+    flushControllerLighting,
+    flushProfile,
+    saveControllerLightingSoon,
+    saveProfileSoon,
+  } from "../lib/store.svelte";
+  import type { Brightness, Effect, EffectType, LightingConfig, MicLedMode, Rgb } from "../lib/types";
 
+  // What is being edited: a profile's lighting, or one controller's own.
+  const target = $derived(app.controllers.find((c) => c.identity === app.lightingTarget) ?? null);
+  const own = $derived(target ? app.settings.controller_lighting[target.identity] : undefined);
   const profile = $derived(editedProfile());
-  const lighting = $derived(profile.lighting);
+  const lighting: LightingConfig = $derived(own ?? profile.lighting);
+  const editing = $derived(!target || !!own);
+
+  const targets = $derived([
+    { value: "", label: t("lighting.target.profile") },
+    ...app.controllers.map((c) => ({ value: c.identity, label: `${c.slot} · ${c.name}` })),
+  ]);
+
+  async function setTarget(identity: string) {
+    await flushProfile();
+    await flushControllerLighting();
+    app.lightingTarget = identity || null;
+  }
+
+  function customize() {
+    if (!target) return;
+    const base = app.settings.profiles.find((p) => p.name === target.profile) ?? app.settings.profiles[0];
+    const copy = JSON.parse(JSON.stringify(base.lighting)) as LightingConfig;
+    // Keep showing the same color: the slot color becomes a fixed color.
+    if (copy.effect.type === "slot_color") {
+      copy.effect = { type: "static", color: SLOT_COLORS[(target.slot - 1) % SLOT_COLORS.length] };
+    }
+    change(api.setControllerLighting(target.identity, copy));
+  }
+
+  function resetToProfile() {
+    if (target) change(api.setControllerLighting(target.identity, null));
+  }
 
   const EFFECTS: EffectType[] = [
     "slot_color",
@@ -27,7 +65,11 @@
   ];
 
   function save() {
-    saveProfileSoon(profile);
+    if (target) {
+      if (own) saveControllerLightingSoon(target.identity, own);
+    } else {
+      saveProfileSoon(profile);
+    }
   }
 
   function currentColor(): Rgb {
@@ -90,11 +132,16 @@
   let frame = $state(0);
   let previewBattery = $state(60);
 
+  // A number, so the live controller updates (30 per second) don't restart
+  // the preview.
+  const previewSlot = $derived(target?.slot ?? 1);
+
   $effect(() => {
     const snapshot = $state.snapshot(lighting);
     const battery = previewBattery;
+    const slot = previewSlot;
     const timer = setTimeout(async () => {
-      frames = await api.previewLighting(snapshot, 1, battery, 12000, FPS);
+      frames = await api.previewLighting(snapshot, slot, battery, 12000, FPS);
     }, 60);
     return () => clearTimeout(timer);
   });
@@ -113,7 +160,7 @@
   const previewColor = $derived(frames[frame] ?? "#000000");
   const previewLeds = $derived.by(() => {
     const m = lighting.player_leds;
-    if (m.type === "slot_number") return 0b00100;
+    if (m.type === "slot_number") return [0b00100, 0b01010, 0b10101, 0b11011, 0b11111][(previewSlot - 1) % 5];
     if (m.type === "battery") return (1 << Math.ceil(previewBattery / 20)) - 1;
     if (m.type === "custom") return m.pattern;
     return 0;
@@ -137,10 +184,31 @@
       <p class="muted">{t("lighting.subtitle")}</p>
     </div>
     <div class="spacer"></div>
-    <ProfilePicker />
+    {#if !target}<ProfilePicker />{/if}
   </div>
 
-  <div class="layout">
+  {#if app.controllers.length > 0}
+    <div class="row target">
+      <span class="muted">{t("lighting.target")}</span>
+      <Segmented options={targets} value={target?.identity ?? ""} onchange={setTarget} label={t("lighting.target")} />
+    </div>
+  {/if}
+
+  {#if target && !own}
+    <div class="card row follows">
+      <p>{t("lighting.follows", { profile: target.profile })}</p>
+      <div class="spacer"></div>
+      <button class="primary" onclick={customize}>{t("lighting.customize")}</button>
+    </div>
+  {:else if target}
+    <div class="card row follows">
+      <p>{t("lighting.custom")}</p>
+      <div class="spacer"></div>
+      <button onclick={resetToProfile}>{t("lighting.reset")}</button>
+    </div>
+  {/if}
+
+  <div class="layout" class:disabled={!editing}>
     <div class="card preview">
       <span class="label muted small">{t("lighting.preview")}</span>
       <PadGraphic color={previewColor} dualsense={true} playerLeds={previewLeds} width={300} />
@@ -274,6 +342,17 @@
 </section>
 
 <style>
+  .target {
+    flex-wrap: wrap;
+  }
+  .follows {
+    padding: 14px 18px;
+    flex-wrap: wrap;
+  }
+  .layout.disabled {
+    opacity: 0.45;
+    pointer-events: none;
+  }
   .layout {
     display: grid;
     grid-template-columns: 340px 1fr;

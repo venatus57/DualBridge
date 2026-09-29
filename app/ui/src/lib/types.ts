@@ -114,6 +114,7 @@ export interface Settings {
   profiles: Profile[];
   assignments: Record<string, string>;
   controller_names: Record<string, string>;
+  controller_lighting: Record<string, LightingConfig>;
 }
 
 export type Model = "dual_shock4" | "dual_sense" | "dual_sense_edge";
@@ -168,6 +169,7 @@ export interface ControllerView {
   has_virtual: boolean;
   virtual_error: string | null;
   mic_muted: boolean;
+  custom_lighting: boolean;
 }
 
 export type BackendStatus = "ready" | "driver_missing" | "unsupported";

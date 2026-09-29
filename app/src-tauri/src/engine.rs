@@ -171,6 +171,8 @@ pub struct ControllerView {
     pub has_virtual: bool,
     pub virtual_error: Option<String>,
     pub mic_muted: bool,
+    /// The controller has its own lighting instead of its profile's.
+    pub custom_lighting: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -452,7 +454,8 @@ impl Engine {
                 battery,
                 mic_muted: links.mic_muted,
             };
-            let mut frame = profile.lighting.render(&ctx);
+            let lighting = settings.lighting_for(c.info.identity(), game.as_deref());
+            let mut frame = lighting.render(&ctx);
             let identifying = links.identify_until.is_some_and(|t| now < t);
             if identifying {
                 frame.lightbar = if (time_ms / 120).is_multiple_of(2) {
@@ -521,6 +524,7 @@ impl Engine {
                     has_virtual: links.is_some_and(|l| l.has_virtual),
                     virtual_error: links.and_then(|l| l.virtual_error.clone()),
                     mic_muted: links.is_some_and(|l| l.mic_muted),
+                    custom_lighting: settings.controller_lighting.contains_key(&id),
                     identity: id,
                 }
             })
@@ -733,6 +737,26 @@ mod tests {
         assert_eq!(views[0].lightbar, "#0040FF");
         assert_eq!(views[0].profile, "Default");
         assert!(views[0].has_virtual);
+        assert!(!views[0].custom_lighting);
+
+        // A controller's own lighting wins over its profile's.
+        e.update_settings(|s| {
+            s.controller_lighting.insert(
+                "p1".into(),
+                dualbridge_core::lighting::LightingConfig {
+                    effect: dualbridge_core::lighting::Effect::Static {
+                        color: Rgb::new(10, 20, 30),
+                    },
+                    ..Default::default()
+                },
+            );
+            Ok(())
+        })
+        .unwrap();
+        e.render_lighting(Instant::now());
+        let views = e.controllers();
+        assert_eq!(views[0].lightbar, "#0A141E");
+        assert!(views[0].custom_lighting);
 
         // Remapping takes effect without reconnecting.
         e.update_settings(|s| {

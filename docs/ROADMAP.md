@@ -69,6 +69,7 @@ app/
 - [x] Brightness control and a "lights off" option
 - [x] DualSense player LEDs (slot number or custom pattern) and mic LED behavior
 - [x] Per-profile and per-game lighting
+- [x] Per-controller lighting (overrides the profile's)
 - [x] Live preview in the UI
 
 ### M4 — Virtual controller (Windows)

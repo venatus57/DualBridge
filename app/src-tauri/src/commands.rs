@@ -102,6 +102,24 @@ pub fn rename_controller(
     Ok(engine.settings())
 }
 
+/// Gives one controller its own lighting, or (with `None`) makes it follow
+/// its profile's lighting again.
+#[tauri::command]
+pub fn set_controller_lighting(
+    engine: EngineState,
+    identity: String,
+    lighting: Option<LightingConfig>,
+) -> Result<Settings, String> {
+    engine.update_settings(|s| {
+        match lighting {
+            Some(l) => s.controller_lighting.insert(identity, l),
+            None => s.controller_lighting.remove(&identity),
+        };
+        Ok(())
+    })?;
+    Ok(engine.settings())
+}
+
 /// Plain app preferences. Omitted fields are left unchanged.
 #[derive(Debug, Default, Deserialize)]
 pub struct PreferencesPatch {

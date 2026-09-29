@@ -61,12 +61,22 @@
           <Icon name={c.transport === "usb" ? "usb" : "bluetooth"} size={13} />
           {c.transport === "usb" ? "USB" : "Bluetooth"}
         </span>
+        {#if c.custom_lighting}
+          <span class="badge"><Icon name="light" size={13} />{t("controller.customLighting")}</span>
+        {/if}
         {#if c.mic_muted}
           <span class="badge warn"><Icon name="mic" size={13} />{t("controller.micMuted")}</span>
         {/if}
       </div>
     </div>
-    <div class="spacer"></div>
+    <div class="arrows">
+      <button class="icon ghost" disabled={c.slot <= 1} onclick={() => api.swapSlots(c.slot, c.slot - 1)} title={t("controller.moveLeft")} aria-label={t("controller.moveLeft")}>
+        <Icon name="left" />
+      </button>
+      <button class="icon ghost" disabled={c.slot >= 8} onclick={() => api.swapSlots(c.slot, c.slot + 1)} title={t("controller.moveRight")} aria-label={t("controller.moveRight")}>
+        <Icon name="right" />
+      </button>
+    </div>
     <div class="battery {batteryClass}" title="{battery.percent} %">
       <div class="cell"><div class="level" style="width:{battery.percent}%"></div></div>
       <span>{battery.percent} %</span>
@@ -92,11 +102,14 @@
       <span class="badge ok" title={t("controller.gameProfile")}><Icon name="game" size={13} />{gameProfile}</span>
     {/if}
     <div class="spacer"></div>
-    <button class="icon ghost" disabled={c.slot <= 1} onclick={() => api.swapSlots(c.slot, c.slot - 1)} title={t("controller.moveLeft")} aria-label={t("controller.moveLeft")}>
-      <Icon name="left" />
-    </button>
-    <button class="icon ghost" disabled={c.slot >= 8} onclick={() => api.swapSlots(c.slot, c.slot + 1)} title={t("controller.moveRight")} aria-label={t("controller.moveRight")}>
-      <Icon name="right" />
+    <button
+      onclick={() => {
+        app.lightingTarget = c.identity;
+        app.page = "lighting";
+      }}
+    >
+      <Icon name="light" size={15} />
+      {t("controller.editLighting")}
     </button>
     <button onclick={() => api.identify(c.slot)} title={t("controller.identify.hint")}>
       <Icon name="pulse" size={15} />
@@ -152,6 +165,8 @@
     flex: none;
   }
   .title {
+    flex: 1;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     gap: 6px;
@@ -170,8 +185,16 @@
   }
   .meta {
     gap: 6px;
+    flex-wrap: wrap;
+  }
+  .arrows {
+    flex: none;
+    display: flex;
+    margin-top: -4px;
   }
   .battery {
+    flex: none;
+    white-space: nowrap;
     display: flex;
     align-items: center;
     gap: 7px;

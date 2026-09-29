@@ -22,6 +22,7 @@ export interface Api {
   deleteProfile(name: string): Promise<Settings>;
   assignProfile(identity: string, profile: string): Promise<Settings>;
   renameController(identity: string, name: string): Promise<Settings>;
+  setControllerLighting(identity: string, lighting: LightingConfig | null): Promise<Settings>;
   setPreferences(patch: PreferencesPatch): Promise<Settings>;
   swapSlots(a: number, b: number): Promise<boolean>;
   hideControllersNow(): Promise<void>;
@@ -43,6 +44,7 @@ const tauriApi: Api = {
   deleteProfile: (name) => invoke("delete_profile", { name }),
   assignProfile: (identity, profile) => invoke("assign_profile", { identity, profile }),
   renameController: (identity, name) => invoke("rename_controller", { identity, name }),
+  setControllerLighting: (identity, lighting) => invoke("set_controller_lighting", { identity, lighting }),
   setPreferences: (patch) => invoke("set_preferences", { patch }),
   swapSlots: (a, b) => invoke("swap_slots", { a, b }),
   hideControllersNow: () => invoke("hide_controllers_now"),
@@ -140,7 +142,7 @@ function createDemoApi(): Api {
         model_name: ds ? "DualSense" : "DualShock 4",
         transport: ds ? "usb" : "bluetooth",
         battery: { percent: battery, charging: ds ? "charging" : "discharging", cable: ds },
-        lightbar: demoRender(profile.lighting, t, slot, battery),
+        lightbar: demoRender(settings.controller_lighting[identity] ?? profile.lighting, t, slot, battery),
         profile: profile.name,
         input: {
           buttons: pressed,
@@ -161,6 +163,7 @@ function createDemoApi(): Api {
         has_virtual: true,
         virtual_error: null,
         mic_muted: false,
+        custom_lighting: identity in settings.controller_lighting,
       } satisfies ControllerView;
     });
   };
@@ -209,6 +212,11 @@ function createDemoApi(): Api {
     },
     async assignProfile(identity, profile) {
       settings.assignments[identity] = profile;
+      return clone();
+    },
+    async setControllerLighting(identity, lighting) {
+      if (lighting) settings.controller_lighting[identity] = JSON.parse(JSON.stringify(lighting));
+      else delete settings.controller_lighting[identity];
       return clone();
     },
     async renameController(identity, name) {

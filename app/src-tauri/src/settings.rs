@@ -3,6 +3,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
+use dualbridge_core::lighting::LightingConfig;
 use dualbridge_core::profile::Profile;
 use serde::{Deserialize, Serialize};
 
@@ -35,6 +36,9 @@ pub struct Settings {
     pub assignments: BTreeMap<String, String>,
     /// User-given names for controllers (by identity).
     pub controller_names: BTreeMap<String, String>,
+    /// Lighting chosen for one controller (by identity). It takes priority
+    /// over the lighting of the controller's profile.
+    pub controller_lighting: BTreeMap<String, LightingConfig>,
 }
 
 impl Default for Settings {
@@ -51,6 +55,7 @@ impl Default for Settings {
             profiles: vec![Profile::default()],
             assignments: BTreeMap::new(),
             controller_names: BTreeMap::new(),
+            controller_lighting: BTreeMap::new(),
         }
     }
 }
@@ -115,6 +120,14 @@ impl Settings {
             .unwrap_or_else(|| self.default_profile())
     }
 
+    /// The lighting a controller should show: its own lighting if it has one,
+    /// else its profile's.
+    pub fn lighting_for(&self, identity: &str, game_profile: Option<&str>) -> &LightingConfig {
+        self.controller_lighting
+            .get(identity)
+            .unwrap_or_else(|| &self.profile_for(identity, game_profile).lighting)
+    }
+
     /// Adds or replaces a profile. `previous_name` renames an existing one
     /// (assignments follow the rename).
     pub fn upsert_profile(
@@ -175,6 +188,19 @@ mod tests {
         assert_eq!(s.profile_for("other", None).name, "Default");
         assert_eq!(s.profile_for("other", Some("Racing")).name, "Racing");
         assert_eq!(s.profile_for("pad", Some("Missing")).name, "Racing");
+    }
+
+    #[test]
+    fn controller_lighting_overrides_profile() {
+        use dualbridge_core::lighting::Effect;
+        let mut s = Settings::default();
+        let own = LightingConfig {
+            effect: Effect::Off,
+            ..LightingConfig::default()
+        };
+        s.controller_lighting.insert("pad".into(), own.clone());
+        assert_eq!(s.lighting_for("pad", None), &own);
+        assert_eq!(s.lighting_for("other", None), &LightingConfig::default());
     }
 
     #[test]

@@ -1,7 +1,7 @@
 import { api } from "./api";
 import { defaultSettings } from "./defaults";
 import { setLanguage, t } from "./i18n.svelte";
-import type { ControllerView, Overview, Profile, Settings } from "./types";
+import type { ControllerView, LightingConfig, Overview, Profile, Settings } from "./types";
 
 export type Page = "controllers" | "lighting" | "profiles" | "settings";
 
@@ -13,6 +13,8 @@ export const app = $state({
   page: "controllers" as Page,
   /** Profile being edited on the Lighting and Profiles pages. */
   editing: "Default",
+  /** Controller (identity) whose own lighting is edited; null = the profile. */
+  lightingTarget: null as string | null,
   wizard: false,
   toast: null as { text: string; error: boolean } | null,
 });
@@ -80,4 +82,21 @@ export async function flushProfile() {
   if (!p) return;
   await change(api.saveProfile(p.profile, p.previous));
   if (p.previous === app.editing) app.editing = p.profile.name;
+}
+
+// Same debounce for a controller's own lighting.
+let lightTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingLight: { identity: string; lighting: LightingConfig } | null = null;
+
+export function saveControllerLightingSoon(identity: string, lighting: LightingConfig) {
+  pendingLight = { identity, lighting: $state.snapshot(lighting) as LightingConfig };
+  clearTimeout(lightTimer);
+  lightTimer = setTimeout(flushControllerLighting, 150);
+}
+
+export async function flushControllerLighting() {
+  clearTimeout(lightTimer);
+  const p = pendingLight;
+  pendingLight = null;
+  if (p) await change(api.setControllerLighting(p.identity, p.lighting));
 }
