@@ -70,3 +70,13 @@ pub trait HidBackend: Send {
     /// separate handles for reading and writing.
     fn open(&mut self, info: &DeviceInfo) -> HidResult<Box<dyn HidDevice>>;
 }
+
+impl HidBackend for Box<dyn HidBackend> {
+    fn enumerate(&mut self) -> HidResult<Vec<DeviceInfo>> {
+        (**self).enumerate()
+    }
+
+    fn open(&mut self, info: &DeviceInfo) -> HidResult<Box<dyn HidDevice>> {
+        (**self).open(info)
+    }
+}

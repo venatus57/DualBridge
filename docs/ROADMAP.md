@@ -44,63 +44,69 @@ app/
 ## Milestones
 
 ### M0 — Scaffold
-- [ ] Cargo workspace with the three crates and the Tauri app
-- [ ] CI (`.github/workflows/ci.yml`): `cargo fmt --check`, `clippy -D warnings`, and tests on Ubuntu, Windows, and macOS
-- [ ] Release workflow (`release.yml`) using `tauri-action`: builds the NSIS `.exe` and the `.dmg` on version tags and attaches them to a GitHub Release
+- [x] Cargo workspace with the three crates and the Tauri app
+- [x] CI (`.github/workflows/ci.yml`): `cargo fmt --check`, `clippy -D warnings`, and tests on Ubuntu, Windows, and macOS
+- [x] Release workflow (`release.yml`) using `tauri-action`: builds the NSIS `.exe` and the `.dmg` on version tags and attaches them to a GitHub Release (pull requests and manual runs upload them as workflow artifacts)
 
 ### M1 — Controller protocols (dualbridge-core)
-- [ ] DS4 input parsing (USB report 0x01, BT report 0x11): sticks, buttons, triggers, touchpad (2 fingers), gyro/accel, battery/charging
-- [ ] DualSense input parsing (USB report 0x01, BT report 0x31): the same, plus mute button and trigger feedback status
-- [ ] Output reports: DS4 (USB 0x05, BT 0x11) and DualSense (USB 0x02, BT 0x31) with lightbar, rumble, player LEDs, mic LED, and adaptive triggers
-- [ ] Bluetooth CRC32 for output reports
-- [ ] Gyro calibration from feature reports
-- [ ] Unit tests with synthesized and captured report fixtures (`tests/fixtures/`)
+- [x] DS4 input parsing (USB report 0x01, BT report 0x11): sticks, buttons, triggers, touchpad (2 fingers), gyro/accel, battery/charging
+- [x] DualSense input parsing (USB report 0x01, BT report 0x31): the same, plus mute button and trigger feedback status
+- [x] Output reports: DS4 (USB 0x05, BT 0x11) and DualSense (USB 0x02, BT 0x31) with lightbar, rumble, player LEDs, mic LED, and adaptive triggers
+- [x] Bluetooth CRC32 for output reports (and checked on input reports)
+- [x] Gyro calibration from feature reports
+- [x] Unit tests with synthesized report fixtures (`crates/dualbridge-core/tests/fixtures/`)
+- [ ] Add fixtures captured from real controllers
 
 ### M2 — Devices (dualbridge-hid)
-- [ ] Enumerate by VID/PID: Sony 0x054C; DS4 v1 0x05C4, DS4 v2 0x09CC, DualSense 0x0CE6, DualSense Edge 0x0DF2
-- [ ] Detect USB vs Bluetooth
-- [ ] Hotplug (connect/disconnect) without restarting the app
-- [ ] Controller manager with up to 8 slots, stable slot assignment, and slot swapping
-- [ ] Battery level and charging state
+- [x] Enumerate by VID/PID: Sony 0x054C; DS4 v1 0x05C4, DS4 v2 0x09CC, DualSense 0x0CE6, DualSense Edge 0x0DF2
+- [x] Detect USB vs Bluetooth
+- [x] Hotplug (connect/disconnect) without restarting the app
+- [x] Controller manager with up to 8 slots, stable slot assignment, and slot swapping
+- [x] Battery level and charging state
 
 ### M3 — Lighting engine
-- [ ] Effects: static, breathing, rainbow cycle, color wave, strobe, battery gradient, low-battery pulse, per-slot default colors
-- [ ] Brightness control and a "lights off" option
-- [ ] DualSense player LEDs (slot number or custom pattern) and mic LED behavior
-- [ ] Per-profile and per-game lighting
-- [ ] Live preview in the UI
+- [x] Effects: static, breathing, rainbow cycle, color wave, strobe, battery gradient, low-battery pulse, per-slot default colors
+- [x] Brightness control and a "lights off" option
+- [x] DualSense player LEDs (slot number or custom pattern) and mic LED behavior
+- [x] Per-profile and per-game lighting
+- [x] Live preview in the UI
 
 ### M4 — Virtual controller (Windows)
-- [ ] ViGEmBus Xbox 360 target, with an optional DS4 target
-- [ ] HidHide integration ("exclusive mode") so games don't see double input
-- [ ] Rumble passthrough from the game back to the controller
-- [ ] Latency meter
-- [ ] Check ViGEmBus's current upstream status (it was retired by its author) and evaluate alternatives before committing
+- [x] ViGEmBus Xbox 360 target
+- [ ] Optional ViGEmBus DS4 target
+- [x] HidHide integration ("exclusive mode") so games don't see double input
+- [x] Rumble passthrough from the game back to the controller
+- [x] Latency meter
+- [x] Check ViGEmBus's current upstream status (it was retired by its author) and evaluate alternatives before committing (see `docs/virtual-controller.md`)
 
 ### M5 — App and UI
-- [ ] Dashboard: one card per controller showing model, connection, battery, slot, color, and live input
-- [ ] Guided first-run setup: driver check and install, connect a controller, pick a color
-- [ ] Settings in plain language, with an "Advanced" section for power users
-- [ ] Profiles, with automatic per-game switching based on the foreground process
-- [ ] Tray icon, start with the OS, minimize to tray
-- [ ] French and English localization
+- [x] Dashboard: one card per controller showing model, connection, battery, slot, color, and live input
+- [x] Guided first-run setup: driver check and install, connect a controller, pick a color
+- [x] Settings in plain language, with an "Advanced" section for power users
+- [x] Profiles, with automatic per-game switching based on the foreground process (Windows)
+- [x] Tray icon, start with the OS, minimize to tray
+- [x] French and English localization
 
 ### M6 — Mapping
-- [ ] Button remapping, including to keyboard and mouse
-- [ ] Stick and trigger deadzones and response curves
+- [x] Button remapping to Xbox buttons
+- [ ] Button remapping to keyboard and mouse
+- [x] Stick and trigger deadzones and response curves
 - [ ] Touchpad as mouse
 - [ ] Gyro aiming (gyro to mouse or right stick)
 
 ### M7 — macOS
+The shared code (lighting, battery, profiles) already builds for macOS; nothing here is verified on hardware yet.
+
 - [ ] HID access, handling the Input Monitoring permission
 - [ ] Lighting, battery, and profiles
 - [ ] Keyboard/mouse mapping (Accessibility permission)
 - [ ] Investigate a virtual gamepad: requires Apple's HID virtual-device entitlement or DriverKit, and may not be feasible
 
 ### M8 — Installers and release
-- [ ] NSIS installer hooks: install ViGEmBus and HidHide if missing (check their redistribution licenses first)
-- [ ] `.dmg` for macOS
-- [ ] Uninstaller removes app data on request
+- [x] NSIS installer hooks: install ViGEmBus and HidHide if missing
+- [ ] Confirm HidHide's redistribution terms (ViGEmBus is BSD-3-Clause)
+- [x] `.dmg` for macOS
+- [x] Uninstaller removes app data on request (built into Tauri's NSIS uninstaller)
 - [ ] Optional: code signing (Windows certificate, Apple Developer ID and notarization)
 
 ## Constraints

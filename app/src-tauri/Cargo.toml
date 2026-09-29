@@ -1,0 +1,38 @@
+[package]
+name = "dualbridge-app"
+description = "DualBridge desktop app"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+default-run = "dualbridge"
+
+[[bin]]
+name = "dualbridge"
+path = "src/main.rs"
+
+[lib]
+name = "dualbridge_app"
+path = "src/lib.rs"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+dualbridge-core.workspace = true
+dualbridge-hid.workspace = true
+dualbridge-virtual.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-autostart = "2"
+tauri-plugin-opener = "2"
+tauri-plugin-single-instance = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_Foundation",
+    "Win32_System_Threading",
+    "Win32_UI_WindowsAndMessaging",
+] }
