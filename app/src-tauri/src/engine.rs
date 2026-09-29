@@ -82,6 +82,38 @@ impl RumbleLink {
     }
 }
 
+/// Only lets short presses of the PS button through.
+///
+/// Holding PS for ~10 s switches a controller off. Forwarding that as a held
+/// Guide button makes Windows open the Xbox Game Bar (and disturbs apps like
+/// animated wallpapers), so PS is held back while pressed and sent as a short
+/// tap when released quickly.
+#[derive(Default)]
+struct PsTap {
+    down_since: Option<Instant>,
+    send_until: Option<Instant>,
+}
+
+impl PsTap {
+    const MAX_TAP: Duration = Duration::from_millis(800);
+    const TAP_LENGTH: Duration = Duration::from_millis(80);
+
+    /// Returns whether PS should look pressed to games right now.
+    fn filter(&mut self, pressed: bool, now: Instant) -> bool {
+        match (pressed, self.down_since) {
+            (true, None) => self.down_since = Some(now),
+            (false, Some(since)) => {
+                if now.duration_since(since) < Self::MAX_TAP {
+                    self.send_until = Some(now + Self::TAP_LENGTH);
+                }
+                self.down_since = None;
+            }
+            _ => {}
+        }
+        self.send_until.is_some_and(|until| now < until)
+    }
+}
+
 /// Runs on the input thread: maps the state and updates the virtual pad.
 struct PadSink {
     cell: Arc<MapperCell>,
@@ -89,6 +121,7 @@ struct PadSink {
     mapper: Mapper,
     pad: Option<Box<dyn VirtualPad>>,
     last: Option<XInputState>,
+    ps: PsTap,
 }
 
 impl InputSink for PadSink {
@@ -101,7 +134,12 @@ impl InputSink for PadSink {
             }
         }
         if let Some(pad) = self.pad.as_mut() {
-            let x = self.mapper.map(state);
+            let mut state = *state;
+            let ps = self
+                .ps
+                .filter(state.buttons.contains(Buttons::PS), Instant::now());
+            state.buttons.set(Buttons::PS, ps);
+            let x = self.mapper.map(&state);
             if self.last != Some(x) {
                 let _ = pad.update(&x);
                 self.last = Some(x);
@@ -313,6 +351,11 @@ impl Engine {
                 ManagerEvent::Disconnected { info, .. } => {
                     self.shared.pads.lock().unwrap().remove(info.identity());
                 }
+                // A controller's other connection (cable + Bluetooth): games
+                // must not see it either.
+                ManagerEvent::Duplicate { info } if exclusive => {
+                    to_hide.push(info.path.clone());
+                }
                 _ => {}
             }
         }
@@ -324,13 +367,14 @@ impl Engine {
     /// Hides every connected controller that isn't hidden yet. `force`
     /// prompts even after the user declined earlier (explicit request).
     pub fn hide_connected(&self, force: bool) {
-        let paths: Vec<String> = self
-            .manager
-            .lock()
-            .unwrap()
-            .controllers()
-            .map(|(_, c)| c.info.path.clone())
-            .collect();
+        let paths: Vec<String> = {
+            let manager = self.manager.lock().unwrap();
+            manager
+                .controllers()
+                .map(|(_, c)| c.info.path.clone())
+                .chain(manager.duplicate_paths().cloned())
+                .collect()
+        };
         self.change_hiding(paths, true, force);
     }
 
@@ -665,6 +709,7 @@ impl EngineShared {
             cell,
             pad,
             last: None,
+            ps: PsTap::default(),
         };
         (Box::new(sink), output)
     }
@@ -775,6 +820,24 @@ mod tests {
         e.shutdown();
         assert!(vpads[0].is_unplugged());
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn ps_long_press_is_not_forwarded() {
+        let mut tap = PsTap::default();
+        let t0 = Instant::now();
+        let ms = |n| t0 + Duration::from_millis(n);
+        // Short press: nothing while held, a short tap on release.
+        assert!(!tap.filter(true, ms(0)));
+        assert!(!tap.filter(true, ms(100)));
+        assert!(tap.filter(false, ms(150)));
+        assert!(tap.filter(false, ms(200)));
+        assert!(!tap.filter(false, ms(300)));
+        // Long press (switching the controller off): never forwarded.
+        assert!(!tap.filter(true, ms(1000)));
+        assert!(!tap.filter(true, ms(5000)));
+        assert!(!tap.filter(false, ms(11000)));
+        assert!(!tap.filter(false, ms(11050)));
     }
 
     #[test]

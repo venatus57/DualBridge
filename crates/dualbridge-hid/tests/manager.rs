@@ -245,9 +245,21 @@ fn eight_slots_max_and_duplicates() {
     pads[MAX_SLOTS].disconnect();
     m.poll().unwrap();
     let _usb = backend.add(Model::DualSense, Transport::Usb, "dup");
-    let _bt = backend.add(Model::DualSense, Transport::Bluetooth, "dup");
+    let bt = backend.add(Model::DualSense, Transport::Bluetooth, "dup");
     let events = m.poll().unwrap();
     assert_eq!(connected_slots(&events).len(), 1);
+    // The unused connection is reported once, so it can be hidden too.
+    let dups: Vec<&ManagerEvent> = events
+        .iter()
+        .filter(|e| matches!(e, ManagerEvent::Duplicate { .. }))
+        .collect();
+    assert_eq!(dups.len(), 1);
+    assert_eq!(m.duplicate_paths().next(), Some(&bt.info().path));
+    assert!(!m
+        .poll()
+        .unwrap()
+        .iter()
+        .any(|e| matches!(e, ManagerEvent::Duplicate { .. })));
 }
 
 #[test]

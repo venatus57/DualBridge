@@ -69,6 +69,43 @@ impl Model {
     }
 }
 
+/// Feature report (ID, length) holding the controller's Bluetooth MAC
+/// address when it is connected over USB.
+pub fn usb_mac_feature_report(model: Model) -> (u8, usize) {
+    match model {
+        Model::DualShock4 => (0x12, 16),
+        Model::DualSense | Model::DualSenseEdge => (0x09, 20),
+    }
+}
+
+/// Extracts the MAC address from the USB MAC feature report (bytes 1 to 6,
+/// least significant first), as 12 lowercase hex digits.
+pub fn parse_usb_mac(model: Model, report: &[u8]) -> Option<String> {
+    let (id, _) = usb_mac_feature_report(model);
+    if report.first() != Some(&id) || report.len() < 7 {
+        return None;
+    }
+    let mac = &report[1..7];
+    if mac.iter().all(|&b| b == 0) || mac.iter().all(|&b| b == 0xFF) {
+        return None;
+    }
+    Some(mac.iter().rev().map(|b| format!("{b:02x}")).collect())
+}
+
+/// Normalizes a MAC address written in any common form (`A4:AE:12:34:56:78`,
+/// `a4ae12345678`, `a4-ae-...`) to 12 lowercase hex digits.
+pub fn normalize_mac(s: &str) -> Option<String> {
+    let hex: String = s
+        .chars()
+        .filter(|c| c.is_ascii_hexdigit())
+        .map(|c| c.to_ascii_lowercase())
+        .collect();
+    let has_only_mac_chars = s
+        .chars()
+        .all(|c| c.is_ascii_hexdigit() || matches!(c, ':' | '-' | ' '));
+    (hex.len() == 12 && has_only_mac_chars).then_some(hex)
+}
+
 /// How the controller is connected.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -101,5 +138,41 @@ mod tests {
         );
         assert_eq!(Model::from_ids(0x045E, PID_DUALSENSE), None);
         assert_eq!(Model::from_ids(SONY_VID, 0x1234), None);
+    }
+
+    #[test]
+    fn usb_and_bluetooth_macs_match() {
+        // USB report: MAC stored least significant byte first.
+        let mut r = [0u8; 20];
+        r[0] = 0x09;
+        r[1..7].copy_from_slice(&[0x78, 0x56, 0x34, 0x12, 0xAE, 0xA4]);
+        let usb = parse_usb_mac(Model::DualSense, &r).unwrap();
+        assert_eq!(usb, "a4ae12345678");
+        // Bluetooth serial as Windows or macOS report it.
+        assert_eq!(
+            normalize_mac("A4:AE:12:34:56:78").as_deref(),
+            Some(usb.as_str())
+        );
+        assert_eq!(normalize_mac("a4ae12345678").as_deref(), Some(usb.as_str()));
+        assert_eq!(
+            normalize_mac("a4-ae-12-34-56-78").as_deref(),
+            Some(usb.as_str())
+        );
+        assert_eq!(normalize_mac("not a mac"), None);
+        assert_eq!(normalize_mac("1234"), None);
+
+        let mut ds4 = [0u8; 16];
+        ds4[0] = 0x12;
+        ds4[1..7].copy_from_slice(&[1, 2, 3, 4, 5, 6]);
+        assert_eq!(
+            parse_usb_mac(Model::DualShock4, &ds4).as_deref(),
+            Some("060504030201")
+        );
+        ds4[0] = 0x09;
+        assert_eq!(parse_usb_mac(Model::DualShock4, &ds4), None);
+        assert_eq!(
+            parse_usb_mac(Model::DualSense, &[0x09, 0, 0, 0, 0, 0, 0]),
+            None
+        );
     }
 }

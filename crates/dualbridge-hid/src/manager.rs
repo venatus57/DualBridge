@@ -6,7 +6,7 @@
 //! ones after it move down (controller 3 becomes 2), and a new controller
 //! takes the next number.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use dualbridge_core::output::OutputState;
@@ -29,6 +29,11 @@ pub enum ManagerEvent {
     },
     Disconnected {
         slot: u8,
+        info: DeviceInfo,
+    },
+    /// Another connection (USB or Bluetooth) of a controller that is already
+    /// in use. It is not used, but should be hidden from games too.
+    Duplicate {
         info: DeviceInfo,
     },
     /// No free slot for this controller.
@@ -67,6 +72,8 @@ pub struct ControllerManager<B: HidBackend> {
     slots: [Option<Slot>; MAX_SLOTS],
     /// Paths that failed to open, so we don't retry (and report) every poll.
     failed: HashMap<String, u32>,
+    /// Other connections of controllers already in use (paths).
+    duplicates: HashSet<String>,
 }
 
 impl<B: HidBackend> ControllerManager<B> {
@@ -76,6 +83,7 @@ impl<B: HidBackend> ControllerManager<B> {
             factory: Box::new(factory),
             slots: Default::default(),
             failed: HashMap::new(),
+            duplicates: HashSet::new(),
         }
     }
 
@@ -110,14 +118,26 @@ impl<B: HidBackend> ControllerManager<B> {
         }
         self.failed
             .retain(|path, _| devices.iter().any(|d| &d.path == path));
+        self.duplicates
+            .retain(|path| devices.iter().any(|d| &d.path == path));
 
         for info in devices {
-            let active = self.slots.iter().flatten().any(|s| {
+            let mut same_path = false;
+            let mut same_controller = false;
+            for s in self.slots.iter().flatten() {
                 let i = &s.handle.shared().info;
-                // The same controller on USB and Bluetooth at once: keep the first.
-                i.path == info.path || i.identity() == info.identity()
-            });
-            if active {
+                same_path |= i.path == info.path;
+                same_controller |= i.identity() == info.identity();
+            }
+            if same_path {
+                continue;
+            }
+            if same_controller {
+                // The same controller on USB and Bluetooth at once: keep the
+                // connection already in use.
+                if self.duplicates.insert(info.path.clone()) {
+                    events.push(ManagerEvent::Duplicate { info });
+                }
                 continue;
             }
             // Retry a failing device only every few polls.
@@ -163,6 +183,12 @@ impl<B: HidBackend> ControllerManager<B> {
         for (i, slot) in remaining.into_iter().enumerate() {
             self.slots[i] = Some(slot);
         }
+    }
+
+    /// Other connections of controllers already in use (see
+    /// [`ManagerEvent::Duplicate`]).
+    pub fn duplicate_paths(&self) -> impl Iterator<Item = &String> {
+        self.duplicates.iter()
     }
 
     /// Connected controllers with their 1-based slot numbers.
