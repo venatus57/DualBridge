@@ -387,11 +387,13 @@ impl Engine {
         if self.demo || !hidhide::is_installed() {
             return;
         }
+        // An explicit request applies again even to devices we think are
+        // hidden: HidHide's configuration may have been changed elsewhere.
         let paths: Vec<String> = {
             let settings = self.shared.settings.lock().unwrap();
             paths
                 .into_iter()
-                .filter(|p| settings.hidden_devices.contains(p) != hide)
+                .filter(|p| force || settings.hidden_devices.contains(p) != hide)
                 .collect()
         };
         if paths.is_empty() {

@@ -150,17 +150,11 @@ mod tests {
 
     #[test]
     fn encode_round_trip() {
-        let cmds = vec![
-            vec![
-                "--app-reg".to_string(),
-                r"C:\Program Files\DualBridge\DualBridge.exe".to_string(),
-            ],
-            vec![
-                "--dev-hide".to_string(),
-                r"HID\VID_054C&PID_0CE6&MI_03\7&1&0&0000".to_string(),
-            ],
-            vec!["--cloak-on".to_string()],
-        ];
+        let cmds = hidhide::hide_commands(
+            r"C:\Program Files\DualBridge\DualBridge.exe",
+            &[r"\\?\HID#VID_054C&PID_0CE6&MI_03#7&1&0&0000#{4d1e55b2-f16f-11cf-88cb-001111000030}".to_string()],
+        );
+        assert_eq!(cmds.len(), 4);
         let hex = encode(&cmds);
         assert!(hex.chars().all(|c| c.is_ascii_hexdigit()));
         assert_eq!(decode(&hex), Some(cmds));

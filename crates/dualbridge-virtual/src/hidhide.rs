@@ -10,6 +10,12 @@
 //! administrator process, so the app runs these commands through a short
 //! elevated helper (one UAC prompt), and only when something must change:
 //! HidHide remembers its configuration across restarts.
+//!
+//! Hiding only affects handles opened afterwards: a program that opened the
+//! controller before it was hidden (Steam, which grabs PlayStation controllers
+//! as soon as they connect, or a running game) keeps reading it. So after
+//! hiding, the helper also restarts the controller's device node, which
+//! closes those handles; only allowed applications (DualBridge) can reopen it.
 
 /// Converts a Windows HID device path, as returned by hidapi
 /// (`\\?\HID#VID_054C&PID_0CE6&MI_03#7&1a2b3c&0&0000#{4d1e55b2-...}`), to the
@@ -54,22 +60,34 @@ pub fn is_installed() -> bool {
     }
 }
 
-/// One `HidHideCLI.exe` invocation (its arguments).
-pub type Command = Vec<String>;
+/// One step run by the elevated helper.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum Command {
+    /// A `HidHideCLI.exe` invocation (its arguments).
+    HidHide(Vec<String>),
+    /// Restart a device (by instance path) so every open handle is closed.
+    RestartDevice(String),
+}
+
+fn cli(args: &[&str]) -> Command {
+    Command::HidHide(args.iter().map(|a| a.to_string()).collect())
+}
 
 /// Commands that let `app_exe` through HidHide, hide the given devices (by
 /// hidapi path) from every other application, and turn hiding on.
 ///
 /// HidHide keeps this configuration (in the registry) until it is changed
-/// again, so it only needs to be done once per controller.
+/// again, so it only needs to be done once per controller. The devices are
+/// then restarted so programs that already had them open lose them.
 pub fn hide_commands(app_exe: &str, hid_paths: &[String]) -> Vec<Command> {
-    let mut cmds = vec![vec!["--app-reg".to_string(), app_exe.to_string()]];
-    for p in hid_paths {
-        if let Some(instance) = instance_path_from_hid_path(p) {
-            cmds.push(vec!["--dev-hide".to_string(), instance]);
-        }
-    }
-    cmds.push(vec!["--cloak-on".to_string()]);
+    let instances: Vec<String> = hid_paths
+        .iter()
+        .filter_map(|p| instance_path_from_hid_path(p))
+        .collect();
+    let mut cmds = vec![cli(&["--app-reg", app_exe])];
+    cmds.extend(instances.iter().map(|i| cli(&["--dev-hide", i])));
+    cmds.push(cli(&["--cloak-on"]));
+    cmds.extend(instances.into_iter().map(Command::RestartDevice));
     cmds
 }
 
@@ -78,7 +96,7 @@ pub fn unhide_commands(hid_paths: &[String]) -> Vec<Command> {
     hid_paths
         .iter()
         .filter_map(|p| instance_path_from_hid_path(p))
-        .map(|instance| vec!["--dev-unhide".to_string(), instance])
+        .map(|instance| cli(&["--dev-unhide", &instance]))
         .collect()
 }
 
@@ -91,7 +109,26 @@ pub fn run_commands(cmds: &[Command]) -> Result<(), String> {
         use std::os::windows::process::CommandExt;
         const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let exe = cli_path().ok_or("HidHide is not installed")?;
-        for args in cmds {
+        for cmd in cmds {
+            let args = match cmd {
+                Command::HidHide(args) => args,
+                Command::RestartDevice(instance) => {
+                    // Best effort: `/restart-device` needs Windows 10 2004 or
+                    // later; without it the controller must be replugged.
+                    let pnputil = std::env::var_os("SystemRoot")
+                        .map(|r| {
+                            std::path::PathBuf::from(r)
+                                .join("System32")
+                                .join("pnputil.exe")
+                        })
+                        .unwrap_or_else(|| "pnputil.exe".into());
+                    let _ = std::process::Command::new(pnputil)
+                        .args(["/restart-device", instance])
+                        .creation_flags(CREATE_NO_WINDOW)
+                        .output();
+                    continue;
+                }
+            };
             let out = std::process::Command::new(&exe)
                 .args(args)
                 .creation_flags(CREATE_NO_WINDOW)
@@ -144,27 +181,21 @@ mod tests {
                 .to_string(),
             "/dev/hidraw0".to_string(),
         ];
+        let instance = r"HID\VID_054C&PID_0CE6&MI_03\7&1&0&0000";
         let hide = hide_commands(r"C:\Program Files\DualBridge\DualBridge.exe", &paths);
         assert_eq!(
             hide,
             vec![
-                vec![
-                    "--app-reg".to_string(),
-                    r"C:\Program Files\DualBridge\DualBridge.exe".to_string()
-                ],
-                vec![
-                    "--dev-hide".to_string(),
-                    r"HID\VID_054C&PID_0CE6&MI_03\7&1&0&0000".to_string()
-                ],
-                vec!["--cloak-on".to_string()],
+                cli(&["--app-reg", r"C:\Program Files\DualBridge\DualBridge.exe"]),
+                cli(&["--dev-hide", instance]),
+                cli(&["--cloak-on"]),
+                // Restarted last, once hidden, so handles opened before close.
+                Command::RestartDevice(instance.to_string()),
             ]
         );
         assert_eq!(
             unhide_commands(&paths),
-            vec![vec![
-                "--dev-unhide".to_string(),
-                r"HID\VID_054C&PID_0CE6&MI_03\7&1&0&0000".to_string()
-            ]]
+            vec![cli(&["--dev-unhide", instance])]
         );
     }
 }
