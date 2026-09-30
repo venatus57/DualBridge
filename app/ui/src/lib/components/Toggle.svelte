@@ -20,7 +20,7 @@
     {#if hint}<span class="hint">{hint}</span>{/if}
   </span>
   <input type="checkbox" bind:checked {disabled} onchange={() => onchange?.(checked)} />
-  <span class="switch" aria-hidden="true"></span>
+  <span class="switch bevel" aria-hidden="true"></span>
 </label>
 
 <style>
@@ -47,35 +47,37 @@
   }
   .switch {
     flex: none;
-    width: 40px;
-    height: 23px;
-    border-radius: 23px;
-    background: var(--panel-2);
-    border: 1px solid var(--line);
+    width: 42px;
+    height: 22px;
+    border-radius: 5px;
+    background: var(--bg-2);
+    border: 1px solid var(--line-2);
     position: relative;
-    transition: background 0.2s;
+    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
   }
   .switch::after {
     content: "";
     position: absolute;
-    top: 2px;
-    left: 2px;
-    width: 17px;
-    height: 17px;
-    border-radius: 50%;
-    background: #c9d2e3;
-    transition: transform 0.2s, background 0.2s;
+    top: 3px;
+    left: 3px;
+    width: 14px;
+    height: 14px;
+    border-radius: 3px;
+    background: var(--dim);
+    transition: transform 0.2s cubic-bezier(0.3, 0.7, 0.3, 1.3), background 0.2s;
   }
   input:checked + .switch {
-    background: var(--accent);
+    background: var(--accent-soft);
     border-color: var(--accent);
+    box-shadow: 0 0 14px -4px var(--accent);
   }
   input:checked + .switch::after {
-    transform: translateX(17px);
-    background: #fff;
+    transform: translateX(20px);
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
   }
   input:focus-visible + .switch {
-    outline: 2px solid var(--accent);
+    outline: 1px solid var(--accent);
     outline-offset: 2px;
   }
 </style>

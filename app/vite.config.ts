@@ -11,6 +11,8 @@ export default defineConfig({
     outDir: "../dist",
     emptyOutDir: true,
     target: "es2021",
+    // Never inline fonts as data: URLs, which the CSP blocks.
+    assetsInlineLimit: 0,
   },
   server: {
     port: 1420,

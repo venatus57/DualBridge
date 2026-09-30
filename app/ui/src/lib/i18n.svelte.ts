@@ -6,6 +6,7 @@ const en = {
   "nav.lighting": "Lighting",
   "nav.profiles": "Profiles",
   "nav.settings": "Settings",
+  "nav.ports": "Slots",
   "demo.banner": "Demo mode: simulated controllers",
 
   "controllers.title": "Controllers",
@@ -265,6 +266,7 @@ const fr: Record<Key, string> = {
   "nav.lighting": "Lumière",
   "nav.profiles": "Profils",
   "nav.settings": "Réglages",
+  "nav.ports": "Emplacements",
   "demo.banner": "Mode démo : manettes simulées",
 
   "controllers.title": "Manettes",

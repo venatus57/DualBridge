@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { InputView } from "../types";
+  import Glyph from "./Glyph.svelte";
 
   let { input, touchpad = [1920, 942] }: { input: InputView; touchpad?: [number, number] } = $props();
 
@@ -7,7 +8,7 @@
   const pos = (v: number) => ((v - 128) / 128) * 14;
 </script>
 
-<div class="live">
+<div class="live bevel">
   <div class="trigger" title="L2">
     <div class="fill" style="height:{(input.l2 / 255) * 100}%"></div>
     <span>L2</span>
@@ -32,7 +33,7 @@
     <div class="dot" class:on={has("l3")} style="transform:translate({pos(input.lx)}px,{pos(input.ly)}px)"></div>
   </div>
 
-  <div class="touchpad" class:on={has("touchpad")}>
+  <div class="touchpad bevel" class:on={has("touchpad")}>
     {#each input.touch as f, i (i)}
       {#if f.active}
         <div class="finger" style="left:{(f.x / touchpad[0]) * 100}%;top:{(f.y / touchpad[1]) * 100}%"></div>
@@ -45,10 +46,10 @@
   </div>
 
   <div class="face">
-    <span class="tri" class:on={has("triangle")}>△</span>
-    <span class="sq" class:on={has("square")}>□</span>
-    <span class="ci" class:on={has("circle")}>○</span>
-    <span class="cr" class:on={has("cross")}>✕</span>
+    <span class="tri" class:on={has("triangle")}><Glyph shape="triangle" size={11} stroke={3} /></span>
+    <span class="sq" class:on={has("square")}><Glyph shape="square" size={11} stroke={3} /></span>
+    <span class="ci" class:on={has("circle")}><Glyph shape="circle" size={11} stroke={3} /></span>
+    <span class="cr" class:on={has("cross")}><Glyph shape="cross" size={11} stroke={3} /></span>
   </div>
 
   <div class="trigger" title="R2">
@@ -58,21 +59,26 @@
 </div>
 
 <style>
+  /* Pressed inputs light up in the controller's own color when there is one. */
   .live {
+    --hi: var(--light, var(--accent));
+    position: relative;
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    background: var(--bg-2);
+    gap: 14px;
+    padding: 12px 14px;
+    background:
+      linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px) 0 0 / 8px 100%,
+      #0a0c10;
     border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
+    border-radius: var(--cut-sm);
   }
   .trigger {
     position: relative;
     width: 14px;
-    height: 44px;
-    border-radius: 5px;
+    height: 46px;
     background: var(--panel-2);
+    border: 1px solid var(--line);
     overflow: hidden;
     flex: none;
   }
@@ -81,15 +87,17 @@
     bottom: 0;
     left: 0;
     right: 0;
-    background: linear-gradient(0deg, var(--accent), var(--accent-2));
+    background: var(--hi);
+    box-shadow: 0 0 10px var(--hi);
   }
   .trigger span {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%) rotate(-90deg);
+    font-family: var(--font-mono);
     font-size: 8px;
-    font-weight: 700;
+    font-weight: 500;
     color: #fff;
     mix-blend-mode: difference;
   }
@@ -100,19 +108,23 @@
   .cluster :global(rect),
   .cluster :global(circle) {
     fill: var(--panel-2);
-    stroke: var(--line);
+    stroke: var(--line-2);
   }
   .cluster :global(.on) {
-    fill: var(--accent);
-    stroke: var(--accent);
+    fill: var(--hi);
+    stroke: var(--hi);
+    filter: drop-shadow(0 0 3px var(--hi));
   }
   .stick {
     position: relative;
-    width: 40px;
-    height: 40px;
+    width: 42px;
+    height: 42px;
     border-radius: 50%;
-    background: radial-gradient(circle, var(--panel-2) 0%, var(--bg-2) 100%);
-    border: 1px solid var(--line);
+    background:
+      linear-gradient(var(--line) 0 0) center / 1px 100% no-repeat,
+      linear-gradient(var(--line) 0 0) center / 100% 1px no-repeat,
+      radial-gradient(circle, var(--panel-2) 0%, #0a0c10 100%);
+    border: 1px solid var(--line-2);
     flex: none;
   }
   .dot {
@@ -123,24 +135,25 @@
     height: 12px;
     margin: -6px 0 0 -6px;
     border-radius: 50%;
-    background: #d6dceb;
+    background: #dfe3ec;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.35);
   }
   .dot.on {
-    background: var(--accent);
-    box-shadow: 0 0 8px var(--accent);
+    background: var(--hi);
+    box-shadow: 0 0 10px var(--hi);
   }
   .touchpad {
     position: relative;
     flex: 1;
     min-width: 60px;
-    height: 40px;
-    border-radius: 8px;
+    height: 42px;
     background: var(--panel-2);
-    border: 1px solid var(--line);
+    border: 1px solid var(--line-2);
+    border-radius: 4px;
   }
   .touchpad.on {
-    border-color: var(--accent);
-    box-shadow: inset 0 0 12px rgba(77, 124, 255, 0.35);
+    border-color: var(--hi);
+    box-shadow: inset 0 0 14px color-mix(in srgb, var(--hi) 40%, transparent);
   }
   .finger {
     position: absolute;
@@ -148,19 +161,21 @@
     height: 10px;
     margin: -5px 0 0 -5px;
     border-radius: 50%;
-    background: var(--accent-2);
-    box-shadow: 0 0 8px var(--accent-2);
+    background: #fff;
+    box-shadow: 0 0 10px var(--hi);
   }
   .face {
     display: grid;
     grid-template-areas: ". t ." "s . c" ". x .";
-    grid-template-columns: repeat(3, 13px);
-    grid-template-rows: repeat(3, 13px);
-    font-size: 11px;
-    line-height: 13px;
-    text-align: center;
-    color: #5d6880;
+    grid-template-columns: repeat(3, 14px);
+    grid-template-rows: repeat(3, 14px);
+    place-items: center;
+    color: var(--dim);
     flex: none;
+  }
+  .face span {
+    line-height: 0;
+    transition: color 0.05s;
   }
   .tri {
     grid-area: t;
@@ -175,19 +190,18 @@
     grid-area: x;
   }
   .face .on {
-    font-weight: 800;
-    text-shadow: 0 0 6px currentColor;
+    filter: drop-shadow(0 0 4px currentColor);
   }
   .tri.on {
-    color: #3ee6b5;
+    color: var(--tri);
   }
   .sq.on {
-    color: #f08de0;
+    color: var(--sqr);
   }
   .ci.on {
-    color: #ff6b6b;
+    color: var(--cir);
   }
   .cr.on {
-    color: #7aa2ff;
+    color: var(--crs);
   }
 </style>

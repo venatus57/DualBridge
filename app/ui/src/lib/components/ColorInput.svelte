@@ -19,7 +19,7 @@
 <div class="color-input">
   {#if label}<span class="label">{label}</span>{/if}
   <div class="row">
-    <label class="swatch" style="background:{hex}; color:{hex}" title={hex}>
+    <label class="swatch bevel" style="background:{hex}; color:{hex}" title={hex}>
       <input type="color" value={hex} oninput={(e) => onchange(fromHex(e.currentTarget.value))} aria-label={label} />
     </label>
     {#if presets}
@@ -54,8 +54,8 @@
   .swatch {
     width: 44px;
     height: 44px;
-    border-radius: 12px;
-    border: 2px solid rgba(255, 255, 255, 0.25);
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.3);
     cursor: pointer;
     position: relative;
     box-shadow: 0 0 18px -4px currentColor;
@@ -72,14 +72,17 @@
     flex-wrap: wrap;
   }
   .preset {
-    width: 24px;
-    height: 24px;
+    width: 22px;
+    height: 22px;
     padding: 0;
-    border-radius: 50%;
-    border: 2px solid transparent;
+    border-radius: 4px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+  }
+  .preset:hover {
+    transform: translateY(-2px);
   }
   .preset.active {
     border-color: #fff;
-    box-shadow: 0 0 0 2px var(--accent);
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px #fff;
   }
 </style>

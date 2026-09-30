@@ -1,6 +1,7 @@
 <script lang="ts">
   import { api } from "../lib/api";
   import Icon from "../lib/components/Icon.svelte";
+  import PageHeader from "../lib/components/PageHeader.svelte";
   import Segmented from "../lib/components/Segmented.svelte";
   import Slider from "../lib/components/Slider.svelte";
   import StickTest from "../lib/components/StickTest.svelte";
@@ -140,17 +141,13 @@
 {/snippet}
 
 <section class="page">
-  <div class="page-header">
-    <div>
-      <h1>{t("profiles.title")}</h1>
-      <p class="muted">{t("profiles.subtitle")}</p>
-    </div>
-  </div>
+  <PageHeader index={3} glyph="square" color="var(--sqr)" title={t("profiles.title")} subtitle={t("profiles.subtitle")} />
 
   <div class="layout">
     <aside class="card list">
       {#each app.settings.profiles as p, i (p.name)}
         <button class="item" class:active={p.name === profile.name} onclick={() => select(p.name)}>
+          <span class="idx mono">{String(i + 1).padStart(2, "0")}</span>
           <span class="name">{p.name}</span>
           <span class="muted small">
             {#if i === 0}{t("profiles.default")}{:else if p.games.length}<Icon name="game" size={12} /> {p.games.length}{/if}
@@ -200,7 +197,7 @@
           {:else}
             <div class="chips">
               {#each profile.games as g, i (g)}
-                <span class="chip"><Icon name="game" size={13} />{g}<button class="ghost icon" aria-label="remove" onclick={() => { profile.games.splice(i, 1); save(); }}><Icon name="x" size={12} /></button></span>
+                <span class="chip bevel"><Icon name="game" size={13} />{g}<button class="ghost icon" aria-label="remove" onclick={() => { profile.games.splice(i, 1); save(); }}><Icon name="x" size={12} /></button></span>
               {/each}
             </div>
           {/if}
@@ -292,17 +289,36 @@
   }
   .item {
     display: flex;
-    justify-content: space-between;
     align-items: center;
+    gap: 10px;
     background: transparent;
     border-color: transparent;
     text-align: left;
+    position: relative;
   }
   .item.active {
-    background: var(--panel-2);
-    border-color: var(--accent);
+    background: linear-gradient(90deg, color-mix(in srgb, var(--sqr) 14%, transparent), transparent);
+    border-color: color-mix(in srgb, var(--sqr) 35%, transparent);
+  }
+  .item.active::before {
+    content: "";
+    position: absolute;
+    left: -11px;
+    top: 7px;
+    bottom: 7px;
+    width: 2px;
+    background: var(--sqr);
+    box-shadow: 0 0 10px var(--sqr);
+  }
+  .idx {
+    font-size: 10px;
+    color: var(--dim);
+  }
+  .item.active .idx {
+    color: var(--sqr);
   }
   .name {
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -320,7 +336,7 @@
     align-items: center;
     gap: 6px;
     padding: 3px 4px 3px 10px;
-    border-radius: 999px;
+    border-radius: 4px;
     background: var(--panel-2);
     border: 1px solid var(--line);
   }
@@ -338,17 +354,22 @@
     justify-content: space-between;
     gap: 10px;
     padding: 4px 8px;
-    border-radius: 8px;
+    border-left: 2px solid transparent;
     transition: background 0.1s;
   }
+  .button-row:hover {
+    background: var(--bg-2);
+  }
   .button-row.pressed {
-    background: rgba(77, 124, 255, 0.2);
+    background: var(--accent-soft);
+    border-left-color: var(--accent);
   }
   .button-row select {
     width: 170px;
   }
   select.changed {
-    border-color: var(--accent-2);
+    border-color: var(--sqr);
+    color: var(--sqr);
   }
   .stick-grid {
     display: grid;
@@ -364,14 +385,13 @@
   .meter {
     position: relative;
     height: 10px;
-    border-radius: 5px;
-    background: var(--bg-2);
-    border: 1px solid var(--line);
+    background: repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 10%), var(--bg-2);
+    border: 1px solid var(--line-2);
   }
   .meter > div {
     height: 100%;
-    border-radius: 5px;
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    background: var(--accent);
+    box-shadow: 0 0 10px var(--accent);
   }
   .mark {
     position: absolute;

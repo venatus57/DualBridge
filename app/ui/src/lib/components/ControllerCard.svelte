@@ -17,6 +17,7 @@
   const batteryClass = $derived(
     battery.charging === "error" ? "bad" : battery.percent <= 15 && battery.charging === "discharging" ? "bad" : battery.percent <= 30 ? "warn" : "ok",
   );
+  const cells = $derived(Math.max(battery.percent > 0 ? 1 : 0, Math.ceil(battery.percent / 20)));
   const ms = (ns: number) => (ns / 1e6).toFixed(ns < 1e6 ? 3 : 2);
   const gameProfile = $derived(app.overview?.active_game_profile ?? null);
 
@@ -32,9 +33,10 @@
 </script>
 
 <article class="card controller" style="--light:{c.lightbar}">
-  <div class="glow"></div>
-  <header class="row">
-    <div class="slot" style="background:{c.lightbar};color:{contrastText(c.lightbar)}" title={t("controller.slot", { n: c.slot })}>
+  <div class="lightbar" aria-hidden="true"></div>
+
+  <header>
+    <div class="slot bevel" style="background:{c.lightbar};color:{contrastText(c.lightbar)}" title={t("controller.slot", { n: c.slot })}>
       {c.slot}
     </div>
     <div class="title">
@@ -49,13 +51,13 @@
         />
       {:else}
         <h2>
-          {c.name}
+          <span class="name">{c.name}</span>
           <button class="ghost icon rename" onclick={startRename} title={t("controller.rename")} aria-label={t("controller.rename")}>
             <Icon name="edit" size={14} />
           </button>
         </h2>
       {/if}
-      <div class="row meta">
+      <div class="meta">
         <span class="badge">{c.model_name}</span>
         <span class="badge">
           <Icon name={c.transport === "usb" ? "usb" : "bluetooth"} size={13} />
@@ -69,26 +71,32 @@
         {/if}
       </div>
     </div>
-    <div class="arrows">
-      <button class="icon ghost" disabled={c.slot <= 1} onclick={() => api.swapSlots(c.slot, c.slot - 1)} title={t("controller.moveLeft")} aria-label={t("controller.moveLeft")}>
-        <Icon name="left" />
-      </button>
-      <button class="icon ghost" disabled={c.slot >= 8} onclick={() => api.swapSlots(c.slot, c.slot + 1)} title={t("controller.moveRight")} aria-label={t("controller.moveRight")}>
-        <Icon name="right" />
-      </button>
-    </div>
-    <div class="battery {batteryClass}" title="{battery.percent} %">
-      <div class="cell"><div class="level" style="width:{battery.percent}%"></div></div>
-      <span>{battery.percent} %</span>
-      {#if battery.charging === "charging" || battery.charging === "full"}<Icon name="bolt" size={14} />{/if}
+    <div class="side">
+      <div class="battery {batteryClass}" title="{battery.percent} %">
+        {#if battery.charging === "charging" || battery.charging === "full"}<Icon name="bolt" size={13} />{/if}
+        <span class="mono">{battery.percent}%</span>
+        <div class="cells">
+          {#each [0, 1, 2, 3, 4] as i (i)}
+            <span class:on={i < cells}></span>
+          {/each}
+        </div>
+      </div>
+      <div class="arrows">
+        <button class="icon ghost" disabled={c.slot <= 1} onclick={() => api.swapSlots(c.slot, c.slot - 1)} title={t("controller.moveLeft")} aria-label={t("controller.moveLeft")}>
+          <Icon name="left" size={16} />
+        </button>
+        <button class="icon ghost" disabled={c.slot >= 8} onclick={() => api.swapSlots(c.slot, c.slot + 1)} title={t("controller.moveRight")} aria-label={t("controller.moveRight")}>
+          <Icon name="right" size={16} />
+        </button>
+      </div>
     </div>
   </header>
 
   <LiveInput input={c.input} touchpad={dualsense ? [1920, 1080] : [1920, 942]} />
 
-  <div class="row controls">
+  <div class="controls">
     <label class="profile">
-      <span class="muted small">{t("controller.profile")}</span>
+      <span class="tag mono">{t("controller.profile")}</span>
       <select
         value={app.settings.assignments[c.identity] ?? app.settings.profiles[0].name}
         onchange={(e) => change(api.assignProfile(c.identity, e.currentTarget.value))}
@@ -117,51 +125,62 @@
     </button>
   </div>
 
-  <footer class="row small">
+  <footer>
     {#if c.has_virtual}
-      <span class="status ok"><Icon name="check" size={14} />{t("controller.virtual.ok")}</span>
+      <span class="status ok"><span class="led"></span>{t("controller.virtual.ok")}</span>
     {:else if c.virtual_error}
-      <span class="status bad" title={c.virtual_error}><Icon name="alert" size={14} />{t("controller.virtual.error")}</span>
+      <span class="status bad" title={c.virtual_error}><span class="led"></span>{t("controller.virtual.error")}</span>
     {:else}
-      <span class="status muted">{t("controller.virtual.off")}</span>
+      <span class="status off"><span class="led"></span>{t("controller.virtual.off")}</span>
     {/if}
     <div class="spacer"></div>
-    <span class="muted" title={t("controller.latency.hint")}>
-      {t("controller.latency")} <b class="num">{ms(c.latency.avg_ns)}</b> / {ms(c.latency.max_ns)} ms
+    <span class="latency" title={t("controller.latency.hint")}>
+      <span class="tag mono">{t("controller.latency")}</span>
+      <b class="num">{ms(c.latency.avg_ns)}</b><span class="num muted"> / {ms(c.latency.max_ns)} ms</span>
     </span>
   </footer>
 </article>
 
 <style>
   .controller {
-    position: relative;
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 16px;
+    padding: 22px 22px 16px;
+    border-color: color-mix(in srgb, var(--light) 22%, var(--line));
+    background:
+      radial-gradient(120% 60% at 50% -10%, color-mix(in srgb, var(--light) 16%, transparent), transparent 70%),
+      var(--panel);
   }
-  .glow {
+  .lightbar {
     position: absolute;
-    inset: -60px -40px auto -40px;
-    height: 120px;
-    background: radial-gradient(ellipse at 50% 0%, var(--light), transparent 70%);
-    opacity: 0.35;
-    pointer-events: none;
-    transition: background 0.1s;
+    top: 0;
+    left: 18%;
+    right: 18%;
+    height: 3px;
+    background: var(--light);
+    box-shadow:
+      0 0 14px 1px var(--light),
+      0 0 40px 4px color-mix(in srgb, var(--light) 50%, transparent);
+    border-radius: 0 0 3px 3px;
   }
   header {
     position: relative;
+    display: flex;
     align-items: flex-start;
+    gap: 14px;
   }
   .slot {
-    width: 38px;
-    height: 38px;
-    border-radius: 11px;
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
     display: grid;
     place-items: center;
-    font-weight: 800;
-    font-size: 17px;
-    box-shadow: 0 0 22px -2px var(--light);
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 20px;
+    box-shadow: 0 0 24px -2px var(--light);
     flex: none;
   }
   .title {
@@ -169,12 +188,19 @@
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 7px;
   }
   .title h2 {
     display: flex;
     align-items: center;
     gap: 4px;
+    font-size: 18px;
+    letter-spacing: 0.04em;
+  }
+  .name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .rename {
     opacity: 0;
@@ -184,21 +210,27 @@
     opacity: 0.7;
   }
   .meta {
+    display: flex;
     gap: 6px;
     flex-wrap: wrap;
   }
-  .arrows {
+  .side {
     flex: none;
     display: flex;
-    margin-top: -4px;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 6px;
+  }
+  .arrows {
+    display: flex;
+    margin-right: -6px;
   }
   .battery {
-    flex: none;
-    white-space: nowrap;
     display: flex;
     align-items: center;
     gap: 7px;
-    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    white-space: nowrap;
   }
   .battery.ok {
     color: var(--ok);
@@ -209,59 +241,96 @@
   .battery.bad {
     color: var(--bad);
   }
-  .cell {
-    width: 30px;
-    height: 14px;
-    border: 2px solid currentColor;
-    border-radius: 4px;
-    padding: 1px;
-    position: relative;
+  .cells {
+    display: flex;
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid color-mix(in srgb, currentColor 45%, transparent);
   }
-  .cell::after {
-    content: "";
-    position: absolute;
-    right: -5px;
-    top: 3px;
-    width: 3px;
-    height: 4px;
-    background: currentColor;
-    border-radius: 0 2px 2px 0;
+  .cells span {
+    width: 5px;
+    height: 11px;
+    background: color-mix(in srgb, currentColor 14%, transparent);
   }
-  .level {
-    height: 100%;
+  .cells span.on {
     background: currentColor;
-    border-radius: 1px;
+    box-shadow: 0 0 5px currentColor;
   }
   .controls {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     flex-wrap: wrap;
   }
   .profile {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 9px;
   }
-  .controls button:not(.icon) {
+  .tag {
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  .controls button {
     display: inline-flex;
     align-items: center;
     gap: 6px;
   }
   footer {
-    border-top: 1px solid var(--line);
-    padding-top: 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 12.5px;
+    margin: 0 -22px;
+    padding: 12px 22px 0;
+    border-top: 1px dashed var(--line-2);
   }
   .status {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 8px;
+  }
+  .led {
+    width: 7px;
+    height: 7px;
+    background: currentColor;
+    box-shadow: 0 0 8px currentColor;
   }
   .status.ok {
     color: var(--ok);
   }
+  .status.ok .led {
+    animation: beat 2.4s ease-in-out infinite;
+  }
   .status.bad {
     color: var(--bad);
   }
+  .status.off {
+    color: var(--muted);
+  }
+  .status.off .led {
+    box-shadow: none;
+    background: var(--dim);
+  }
+  .latency {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+  }
   .num {
-    font-variant-numeric: tabular-nums;
     color: var(--text);
+    font-weight: 500;
+  }
+  .num.muted {
+    color: var(--muted);
+    font-weight: 400;
+  }
+  @keyframes beat {
+    50% {
+      opacity: 0.35;
+    }
   }
 </style>

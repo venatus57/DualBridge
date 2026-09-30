@@ -12,7 +12,7 @@
   } = $props();
 </script>
 
-<div class="seg" role="radiogroup" aria-label={label}>
+<div class="seg bevel" role="radiogroup" aria-label={label}>
   {#each options as o (o.value)}
     <button
       type="button"
@@ -29,24 +29,27 @@
     display: inline-flex;
     flex-wrap: wrap;
     background: var(--bg-2);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--line-2);
+    border-radius: var(--cut-sm);
     padding: 3px;
-    gap: 3px;
+    gap: 2px;
   }
   button {
-    border: none;
+    border: 1px solid transparent;
     background: transparent;
-    padding: 6px 12px;
-    border-radius: 7px;
+    padding: 6px 13px;
+    border-radius: 4px;
     color: var(--muted);
   }
   button:hover {
     background: var(--panel-2);
+    border-color: transparent;
     color: var(--text);
   }
   button.active {
-    background: var(--accent);
-    color: #fff;
+    background: var(--accent-soft);
+    border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+    color: var(--accent);
+    box-shadow: inset 0 -2px 0 var(--accent);
   }
 </style>

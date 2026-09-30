@@ -2,6 +2,7 @@
   import { onMount } from "svelte";
   import { api } from "../lib/api";
   import Icon from "../lib/components/Icon.svelte";
+  import PageHeader from "../lib/components/PageHeader.svelte";
   import Toggle from "../lib/components/Toggle.svelte";
   import { LANGUAGES, t } from "../lib/i18n.svelte";
   import { app, change, refreshOverview } from "../lib/store.svelte";
@@ -27,9 +28,7 @@
 </script>
 
 <section class="page">
-  <div class="page-header">
-    <h1>{t("settings.title")}</h1>
-  </div>
+  <PageHeader index={4} glyph="circle" color="var(--cir)" title={t("settings.title")} />
 
   <div class="card stack">
     <h2>{t("settings.general")}</h2>
@@ -116,6 +115,16 @@
     display: flex;
     align-items: center;
     gap: 12px;
+    padding: 12px 14px;
+    background: var(--bg-2);
+    border: 1px solid var(--line);
+    border-left: 2px solid var(--line-2);
+  }
+  .driver:has(:global(.badge.ok)) {
+    border-left-color: var(--ok);
+  }
+  .driver:has(:global(.badge.bad)) {
+    border-left-color: var(--bad);
   }
   .stack-tight {
     flex: 1;

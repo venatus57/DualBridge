@@ -35,15 +35,19 @@
 
 <div class="overlay">
   <div class="wizard card">
-    <div class="progress">
-      {#each Array(STEPS) as _, i (i)}
-        <span class:done={i <= step}></span>
-      {/each}
+    <div class="lightbar" aria-hidden="true"></div>
+    <div class="top">
+      <div class="progress">
+        {#each Array(STEPS) as _, i (i)}
+          <span class:done={i <= step}></span>
+        {/each}
+      </div>
+      <span class="counter mono">0{step + 1} / 0{STEPS}</span>
     </div>
 
-    <div class="body">
+    {#key step}<div class="body">
       {#if step === 0}
-        <PadGraphic color="#4d7cff" width={240} playerLeds={0b00100} />
+        <PadGraphic color="#3ef0c4" width={250} playerLeds={0b00100} />
         <h1>{t("welcome.step1.title")}</h1>
         <p class="muted">{t("welcome.step1.text")}</p>
       {:else if step === 1}
@@ -87,10 +91,10 @@
         <PadGraphic color={previewColor} width={220} playerLeds={0b00100} />
         <p class="muted">{t("welcome.step4.text")}</p>
         <div class="choices">
-          <button class="choice" class:active={slotColors} onclick={() => (slotColors = true)}>
+          <button class="choice bevel" class:active={slotColors} onclick={() => (slotColors = true)}>
             <span class="rainbow"></span>{t("welcome.step4.slot")}
           </button>
-          <div class="choice" class:active={!slotColors}>
+          <div class="choice bevel" class:active={!slotColors}>
             <ColorInput value={color} onchange={(c) => { color = c; slotColors = false; }} />
           </div>
         </div>
@@ -99,7 +103,7 @@
         <h1>{t("welcome.step5.title")}</h1>
         <p class="muted">{t("welcome.step5.text")}</p>
       {/if}
-    </div>
+    </div>{/key}
 
     <div class="row footer">
       {#if step < STEPS - 1}
@@ -125,30 +129,56 @@
     z-index: 50;
     display: grid;
     place-items: center;
-    background: radial-gradient(ellipse at 50% 20%, rgba(77, 124, 255, 0.25), transparent 60%), rgba(8, 10, 15, 0.92);
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(62, 240, 196, 0.16), transparent 55%),
+      radial-gradient(circle at 1px 1px, rgba(255, 255, 255, 0.05) 1px, transparent 0) 0 0 / 22px 22px,
+      rgba(5, 6, 8, 0.94);
     backdrop-filter: blur(6px);
   }
   .wizard {
-    width: min(620px, 92vw);
-    min-height: 480px;
+    width: min(640px, 92vw);
+    min-height: 500px;
     display: flex;
     flex-direction: column;
     gap: 20px;
-    padding: 26px 30px;
+    padding: 26px 32px;
     box-shadow: var(--shadow);
+    overflow: hidden;
+    animation: rise 0.4s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .lightbar {
+    position: absolute;
+    top: 0;
+    left: 25%;
+    right: 25%;
+    height: 3px;
+    background: var(--accent);
+    box-shadow: 0 0 20px 2px var(--accent);
+  }
+  .top {
+    display: flex;
+    align-items: center;
+    gap: 16px;
   }
   .progress {
+    flex: 1;
     display: flex;
     gap: 6px;
   }
   .progress span {
     flex: 1;
     height: 4px;
-    border-radius: 2px;
-    background: var(--panel-2);
+    background: var(--panel-3);
+    transition: background 0.3s, box-shadow 0.3s;
   }
   .progress span.done {
-    background: linear-gradient(90deg, var(--accent), var(--accent-2));
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+  }
+  .counter {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
   }
   .body {
     flex: 1;
@@ -158,6 +188,7 @@
     justify-content: center;
     text-align: center;
     gap: 16px;
+    animation: rise 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
   }
   .body p {
     max-width: 460px;
@@ -192,18 +223,17 @@
     align-items: center;
     gap: 10px;
     padding: 10px 14px;
-    border: 1px solid var(--line);
-    border-radius: var(--radius-sm);
+    border: 1px solid var(--line-2);
+    border-radius: var(--cut-sm);
     background: var(--bg-2);
   }
   .choice.active {
     border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
+    box-shadow: 0 0 18px -6px var(--accent);
   }
   .rainbow {
     width: 28px;
     height: 28px;
-    border-radius: 8px;
     background: conic-gradient(#0040ff, #ff1010, #00dc3c, #ff28a0, #0040ff);
   }
   @keyframes blink {

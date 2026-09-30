@@ -2,6 +2,7 @@
   import { api } from "../lib/api";
   import ColorInput from "../lib/components/ColorInput.svelte";
   import PadGraphic from "../lib/components/PadGraphic.svelte";
+  import PageHeader from "../lib/components/PageHeader.svelte";
   import Segmented from "../lib/components/Segmented.svelte";
   import Slider from "../lib/components/Slider.svelte";
   import Toggle from "../lib/components/Toggle.svelte";
@@ -26,11 +27,6 @@
   const profile = $derived(editedProfile());
   const lighting: LightingConfig = $derived(own ?? profile.lighting);
   const editing = $derived(!target || !!own);
-
-  const targets = $derived([
-    { value: "", label: t("lighting.target.profile") },
-    ...app.controllers.map((c) => ({ value: c.identity, label: `${c.slot} · ${c.name}` })),
-  ]);
 
   async function setTarget(identity: string) {
     await flushProfile();
@@ -111,7 +107,7 @@
       case "rainbow":
         return `background: linear-gradient(90deg, ${[0, 60, 120, 180, 240, 300, 360].map((h) => { const c = hsv(h, 1, 1); return `rgb(${c.r},${c.g},${c.b})`; }).join(",")})`;
       case "color_cycle":
-        return "background: linear-gradient(90deg, #4d7cff, #ff28a0, #00dcdc)";
+        return "background: linear-gradient(90deg, #5c8dff, #ff28a0, #00dcdc)";
       case "battery_level":
         return "background: linear-gradient(90deg, #ff1010, #ffd200, #00dc3c)";
       case "off":
@@ -119,9 +115,9 @@
       case "strobe":
         return "background: repeating-linear-gradient(90deg, #fff 0 6px, #111 6px 14px)";
       case "breathing":
-        return "background: radial-gradient(circle, #4d7cff, #0b1020)";
+        return "background: radial-gradient(circle, #3ef0c4, #04110d 75%)";
       default:
-        return "background: #4d7cff";
+        return "background: #3ef0c4";
     }
   }
 
@@ -178,30 +174,39 @@
 </script>
 
 <section class="page">
-  <div class="page-header">
-    <div>
-      <h1>{t("lighting.title")}</h1>
-      <p class="muted">{t("lighting.subtitle")}</p>
-    </div>
-    <div class="spacer"></div>
+  <PageHeader index={2} glyph="triangle" color="var(--tri)" title={t("lighting.title")} subtitle={t("lighting.subtitle")}>
     {#if !target}<ProfilePicker />{/if}
-  </div>
+  </PageHeader>
 
   {#if app.controllers.length > 0}
-    <div class="row target">
-      <span class="muted">{t("lighting.target")}</span>
-      <Segmented options={targets} value={target?.identity ?? ""} onchange={setTarget} label={t("lighting.target")} />
+    <div class="targets" role="radiogroup" aria-label={t("lighting.target")}>
+      <span class="tag mono">{t("lighting.target")}</span>
+      <button class="target" role="radio" aria-checked={!target} class:active={!target} onclick={() => setTarget("")}>
+        <span class="chip profile-chip"></span>{t("lighting.target.profile")}
+      </button>
+      {#each app.controllers as c (c.identity)}
+        <button
+          class="target"
+          role="radio"
+          aria-checked={target?.identity === c.identity}
+          class:active={target?.identity === c.identity}
+          style="--l:{c.lightbar}"
+          onclick={() => setTarget(c.identity)}
+        >
+          <span class="chip mono">{c.slot}</span>{c.name}
+        </button>
+      {/each}
     </div>
   {/if}
 
   {#if target && !own}
-    <div class="card row follows">
+    <div class="notice">
       <p>{t("lighting.follows", { profile: target.profile })}</p>
       <div class="spacer"></div>
       <button class="primary" onclick={customize}>{t("lighting.customize")}</button>
     </div>
   {:else if target}
-    <div class="card row follows">
+    <div class="notice custom">
       <p>{t("lighting.custom")}</p>
       <div class="spacer"></div>
       <button onclick={resetToProfile}>{t("lighting.reset")}</button>
@@ -209,10 +214,16 @@
   {/if}
 
   <div class="layout" class:disabled={!editing}>
-    <div class="card preview">
-      <span class="label muted small">{t("lighting.preview")}</span>
-      <PadGraphic color={previewColor} dualsense={true} playerLeds={previewLeds} width={300} />
-      <div class="swatch" style="background:{previewColor}; box-shadow: 0 0 40px {previewColor}"></div>
+    <div class="card preview" style="--p:{previewColor}">
+      <div class="preview-top">
+        <span class="tag mono">{t("lighting.preview")}</span>
+        <span class="hex mono">{previewColor.toUpperCase()}</span>
+      </div>
+      <div class="stage">
+        <div class="spill"></div>
+        <PadGraphic color={previewColor} dualsense={true} playerLeds={previewLeds} width={290} />
+        <div class="floor"></div>
+      </div>
       {#if lighting.effect.type === "battery_level" || lighting.low_battery.enabled || lighting.player_leds.type === "battery"}
         <div class="battery-sim">
           <Slider label="🔋" bind:value={previewBattery} min={0} max={100} step={1} format={(v) => `${v} %`} />
@@ -227,6 +238,7 @@
           {#each EFFECTS as type (type)}
             <button class="tile" class:active={lighting.effect.type === type} onclick={() => pick(type)}>
               <span class="tile-swatch" style={tileStyle(type)}></span>
+              <span class="tile-check" aria-hidden="true"></span>
               <span class="tile-name">{t(`effect.${type}` as Key)}</span>
               <span class="tile-desc">{t(`effect.${type}.desc` as Key)}</span>
             </button>
@@ -342,20 +354,71 @@
 </section>
 
 <style>
-  .target {
-    flex-wrap: wrap;
+  .tag {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--dim);
   }
-  .follows {
-    padding: 14px 18px;
+  .targets {
+    display: flex;
     flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+  .targets .tag {
+    margin-right: 6px;
+  }
+  .target {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    padding: 5px 12px 5px 5px;
+    background: var(--bg-2);
+    color: var(--muted);
+  }
+  .target.active {
+    color: var(--text);
+    border-color: var(--l, var(--accent));
+    background: color-mix(in srgb, var(--l, var(--accent)) 12%, var(--bg-2));
+    box-shadow: 0 0 18px -6px var(--l, var(--accent));
+  }
+  .chip {
+    width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    font-size: 11px;
+    color: #fff;
+    background: var(--l);
+    box-shadow: 0 0 10px -2px var(--l);
+    text-shadow: 0 0 4px rgba(0, 0, 0, 0.6);
+  }
+  .profile-chip {
+    background: repeating-linear-gradient(45deg, var(--line-2) 0 3px, var(--panel-2) 3px 6px);
+    box-shadow: none;
+  }
+  .notice {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 12px 16px;
+    background: linear-gradient(90deg, rgba(255, 194, 61, 0.08), transparent 70%);
+    border-left: 2px solid var(--warn);
+  }
+  .notice.custom {
+    background: linear-gradient(90deg, var(--accent-soft), transparent 70%);
+    border-left-color: var(--accent);
   }
   .layout.disabled {
-    opacity: 0.45;
+    opacity: 0.4;
+    filter: saturate(0.4);
     pointer-events: none;
   }
   .layout {
     display: grid;
-    grid-template-columns: 340px 1fr;
+    grid-template-columns: 350px 1fr;
     gap: 18px;
     align-items: start;
   }
@@ -364,16 +427,53 @@
     top: 0;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    gap: 18px;
+    gap: 14px;
+    overflow: hidden;
+    padding: 16px;
+    background: #06070a;
+    border-color: color-mix(in srgb, var(--p) 25%, var(--line));
   }
-  .preview .label {
-    align-self: flex-start;
+  .preview-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
   }
-  .swatch {
-    width: 100%;
-    height: 14px;
-    border-radius: 7px;
+  .hex {
+    font-size: 12px;
+    color: var(--p);
+    text-shadow: 0 0 8px var(--p);
+  }
+  .stage {
+    position: relative;
+    height: 260px;
+    display: grid;
+    place-items: center;
+    margin: 0 -16px;
+  }
+  .spill {
+    position: absolute;
+    top: -20px;
+    left: 10%;
+    right: 10%;
+    height: 170px;
+    background: radial-gradient(closest-side, var(--p), transparent);
+    opacity: 0.35;
+  }
+  .stage :global(svg) {
+    position: relative;
+  }
+  .floor {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 70px;
+    background:
+      radial-gradient(60% 100% at 50% 0%, color-mix(in srgb, var(--p) 45%, transparent), transparent 70%),
+      repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.05) 0 1px, transparent 1px 22px);
+    mask-image: linear-gradient(180deg, #000, transparent);
+    transform: perspective(200px) rotateX(35deg);
+    transform-origin: top;
   }
   .battery-sim {
     width: 100%;
@@ -384,28 +484,52 @@
     gap: 10px;
   }
   .tile {
+    position: relative;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: 4px;
+    gap: 3px;
     text-align: left;
-    padding: 10px;
+    padding: 0 0 10px;
+    overflow: hidden;
     background: var(--bg-2);
+  }
+  .tile:hover .tile-swatch {
+    filter: brightness(1.15);
   }
   .tile.active {
     border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent), 0 6px 20px -8px var(--accent);
+    box-shadow: 0 0 22px -8px var(--accent);
   }
   .tile-swatch {
     width: 100%;
-    height: 26px;
-    border-radius: 7px;
-    margin-bottom: 4px;
+    height: 34px;
+    margin-bottom: 7px;
+    transition: filter 0.2s;
+  }
+  .tile-check {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 10px;
+    height: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    background: rgba(0, 0, 0, 0.4);
+  }
+  .tile.active .tile-check {
+    background: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
   }
   .tile-name {
+    padding: 0 10px;
+    font-family: var(--font-display);
     font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
   .tile-desc {
+    padding: 0 10px;
     font-size: 12px;
     color: var(--muted);
   }
@@ -416,8 +540,8 @@
     align-items: start;
   }
   .indent {
-    padding-left: 12px;
-    border-left: 2px solid var(--line);
+    padding-left: 14px;
+    border-left: 1px dashed var(--line-2);
   }
   .cycle {
     display: flex;
@@ -436,9 +560,9 @@
   }
   .led {
     width: 22px;
-    height: 22px;
-    border-radius: 50%;
+    height: 8px;
     padding: 0;
+    border-radius: 0;
     background: var(--bg-2);
   }
   .led.on {

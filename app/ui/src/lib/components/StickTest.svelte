@@ -56,7 +56,7 @@
     opacity: 0.7;
   }
   .dead {
-    fill: rgba(248, 113, 113, 0.18);
+    fill: rgba(255, 79, 98, 0.16);
     stroke: var(--bad);
   }
   .axis {
@@ -68,6 +68,7 @@
     stroke-width: 2;
   }
   .mapped {
-    fill: var(--accent-2);
+    fill: var(--accent);
+    filter: drop-shadow(0 0 4px var(--accent));
   }
 </style>
