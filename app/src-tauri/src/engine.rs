@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use dualbridge_core::calibration::CalibratedMotion;
 use dualbridge_core::lighting::LightingContext;
 use dualbridge_core::mapping::{Mapper, XInputState};
-use dualbridge_core::output::{OutputState, TriggerEffect};
+use dualbridge_core::output::{OutputState, PlayerLeds, TriggerEffect};
 use dualbridge_core::profile::{Profile, VirtualKind};
 use dualbridge_core::state::{Battery, Buttons, Touch};
 use dualbridge_core::{ControllerState, Model, Rgb, Transport};
@@ -508,6 +508,13 @@ impl Engine {
                     Rgb::WHITE
                 } else {
                     Rgb::BLACK
+                };
+                // Controllers without a lightbar (Switch Pro) blink their
+                // player LEDs instead; slower, as each change is a command.
+                frame.player_leds = if (time_ms / 250).is_multiple_of(2) {
+                    PlayerLeds::ALL
+                } else {
+                    PlayerLeds::OFF
                 };
             } else if links.identify_until.take().is_some() {
                 c.update_output(|o| {

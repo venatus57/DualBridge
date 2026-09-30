@@ -14,6 +14,10 @@ pub const PID_DS4_DONGLE: u16 = 0x0BA0;
 pub const PID_DUALSENSE: u16 = 0x0CE6;
 /// DualSense Edge.
 pub const PID_DUALSENSE_EDGE: u16 = 0x0DF2;
+/// Nintendo's USB vendor ID.
+pub const NINTENDO_VID: u16 = 0x057E;
+/// Nintendo Switch Pro Controller.
+pub const PID_SWITCH_PRO: u16 = 0x2009;
 
 /// A supported controller family.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -22,19 +26,29 @@ pub enum Model {
     DualShock4,
     DualSense,
     DualSenseEdge,
+    /// Nintendo Switch Pro Controller.
+    SwitchPro,
 }
 
 impl Model {
     /// Identifies a controller from its USB vendor and product IDs.
     pub fn from_ids(vendor_id: u16, product_id: u16) -> Option<Model> {
-        if vendor_id != SONY_VID {
-            return None;
-        }
-        match product_id {
-            PID_DS4_V1 | PID_DS4_V2 | PID_DS4_DONGLE => Some(Model::DualShock4),
-            PID_DUALSENSE => Some(Model::DualSense),
-            PID_DUALSENSE_EDGE => Some(Model::DualSenseEdge),
+        match (vendor_id, product_id) {
+            (SONY_VID, PID_DS4_V1 | PID_DS4_V2 | PID_DS4_DONGLE) => Some(Model::DualShock4),
+            (SONY_VID, PID_DUALSENSE) => Some(Model::DualSense),
+            (SONY_VID, PID_DUALSENSE_EDGE) => Some(Model::DualSenseEdge),
+            (NINTENDO_VID, PID_SWITCH_PRO) => Some(Model::SwitchPro),
             _ => None,
+        }
+    }
+
+    /// USB vendor and product IDs (the second DS4 revision for DS4).
+    pub fn ids(self) -> (u16, u16) {
+        match self {
+            Model::DualShock4 => (SONY_VID, PID_DS4_V2),
+            Model::DualSense => (SONY_VID, PID_DUALSENSE),
+            Model::DualSenseEdge => (SONY_VID, PID_DUALSENSE_EDGE),
+            Model::SwitchPro => (NINTENDO_VID, PID_SWITCH_PRO),
         }
     }
 
@@ -43,26 +57,35 @@ impl Model {
         matches!(self, Model::DualSense | Model::DualSenseEdge)
     }
 
+    /// `true` for Nintendo controllers (see [`crate::switch`]).
+    pub fn is_switch(self) -> bool {
+        self == Model::SwitchPro
+    }
+
     /// Human-readable product name.
     pub fn display_name(self) -> &'static str {
         match self {
             Model::DualShock4 => "DualShock 4",
             Model::DualSense => "DualSense",
             Model::DualSenseEdge => "DualSense Edge",
+            Model::SwitchPro => "Pro Controller",
         }
     }
 
-    /// Touchpad resolution (width, height) in touch units.
+    /// Touchpad resolution (width, height) in touch units; `(0, 0)` for
+    /// controllers without one.
     pub fn touchpad_size(self) -> (u16, u16) {
         match self {
             Model::DualShock4 => (1920, 942),
             Model::DualSense | Model::DualSenseEdge => (1920, 1080),
+            Model::SwitchPro => (0, 0),
         }
     }
 
     /// Size of the full input report for this model on this transport.
     pub fn input_report_len(self, transport: Transport) -> usize {
         match (self, transport) {
+            (Model::SwitchPro, _) => 64,
             (_, Transport::Usb) => 64,
             (_, Transport::Bluetooth) => 78,
         }
@@ -70,18 +93,21 @@ impl Model {
 }
 
 /// Feature report (ID, length) holding the controller's Bluetooth MAC
-/// address when it is connected over USB.
-pub fn usb_mac_feature_report(model: Model) -> (u8, usize) {
+/// address when it is connected over USB. `None` for the Switch Pro
+/// Controller, which gives it in reply to a USB command instead
+/// ([`crate::switch::USB_STATUS_REQUEST`]).
+pub fn usb_mac_feature_report(model: Model) -> Option<(u8, usize)> {
     match model {
-        Model::DualShock4 => (0x12, 16),
-        Model::DualSense | Model::DualSenseEdge => (0x09, 20),
+        Model::DualShock4 => Some((0x12, 16)),
+        Model::DualSense | Model::DualSenseEdge => Some((0x09, 20)),
+        Model::SwitchPro => None,
     }
 }
 
 /// Extracts the MAC address from the USB MAC feature report (bytes 1 to 6,
 /// least significant first), as 12 lowercase hex digits.
 pub fn parse_usb_mac(model: Model, report: &[u8]) -> Option<String> {
-    let (id, _) = usb_mac_feature_report(model);
+    let (id, _) = usb_mac_feature_report(model)?;
     if report.first() != Some(&id) || report.len() < 7 {
         return None;
     }
@@ -138,6 +164,20 @@ mod tests {
         );
         assert_eq!(Model::from_ids(0x045E, PID_DUALSENSE), None);
         assert_eq!(Model::from_ids(SONY_VID, 0x1234), None);
+        assert_eq!(
+            Model::from_ids(NINTENDO_VID, PID_SWITCH_PRO),
+            Some(Model::SwitchPro)
+        );
+        assert_eq!(Model::from_ids(SONY_VID, PID_SWITCH_PRO), None);
+        for m in [
+            Model::DualShock4,
+            Model::DualSense,
+            Model::DualSenseEdge,
+            Model::SwitchPro,
+        ] {
+            let (v, p) = m.ids();
+            assert_eq!(Model::from_ids(v, p), Some(m));
+        }
     }
 
     #[test]

@@ -8,6 +8,8 @@
 //! | DualSense USB `0x02`        | 48     | 1                 |
 //! | DualSense Bluetooth `0x31`  | 78     | 3 (CRC32 at 74)   |
 //!
+//! The Switch Pro Controller's reports are built by [`crate::switch`].
+//!
 //! Building a report never allocates.
 
 use serde::{Deserialize, Serialize};
@@ -15,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use crate::color::Rgb;
 use crate::crc;
 use crate::device::{Model, Transport};
+use crate::switch::SwitchOutput;
 
 /// Largest output report of any supported controller.
 pub const MAX_OUTPUT_LEN: usize = 78;
@@ -188,6 +191,7 @@ pub struct OutputBuilder {
     model: Model,
     transport: Transport,
     seq: u8,
+    switch: SwitchOutput,
     buf: [u8; MAX_OUTPUT_LEN],
 }
 
@@ -197,6 +201,7 @@ impl OutputBuilder {
             model,
             transport,
             seq: 0,
+            switch: SwitchOutput::default(),
             buf: [0; MAX_OUTPUT_LEN],
         }
     }
@@ -204,6 +209,10 @@ impl OutputBuilder {
     /// Builds the report for `state` and returns it, ready to be written.
     pub fn build(&mut self, state: &OutputState) -> &[u8] {
         self.buf = [0; MAX_OUTPUT_LEN];
+        if self.model.is_switch() {
+            let len = self.switch.build(state, &mut self.buf);
+            return &self.buf[..len];
+        }
         let len = match (self.model.is_dualsense(), self.transport) {
             (false, Transport::Usb) => {
                 self.buf[0] = REPORT_DS4_USB;

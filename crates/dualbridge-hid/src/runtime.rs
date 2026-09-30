@@ -19,6 +19,7 @@ use std::time::{Duration, Instant};
 use dualbridge_core::calibration::{self, Calibration};
 use dualbridge_core::input::InputParser;
 use dualbridge_core::output::{OutputBuilder, OutputState};
+use dualbridge_core::switch::SwitchInit;
 use dualbridge_core::{ControllerState, Transport};
 
 use crate::latency::LatencyMeter;
@@ -35,6 +36,15 @@ const READ_BUF_LEN: usize = 128;
 const SILENCE_TIMEOUT: Duration = Duration::from_secs(2);
 /// How long a liveness check waits for an input report.
 const PROBE_READ_MS: i32 = 1000;
+/// How long a Switch setup step waits for its reply, and how many times it is
+/// sent before moving on.
+const SWITCH_STEP_MS: u64 = 300;
+const SWITCH_STEP_TRIES: u32 = 3;
+/// The Switch Pro Controller stops vibrating on its own unless the rumble is
+/// sent again regularly.
+const SWITCH_RUMBLE_REFRESH: Duration = Duration::from_millis(30);
+/// Writer wake-up interval when there is nothing to refresh.
+const WRITER_IDLE: Duration = Duration::from_millis(500);
 
 /// Receives every parsed input report, on the input thread.
 ///
@@ -125,7 +135,11 @@ impl ControllerHandle {
         initial_output: OutputState,
     ) -> HidResult<ControllerHandle> {
         let mut reader = backend.open(&info)?;
-        let calibration = read_calibration(reader.as_mut(), &info);
+        let calibration = if info.model.is_switch() {
+            switch_setup(reader.as_mut(), &info)?
+        } else {
+            read_calibration(reader.as_mut(), &info)
+        };
         // A Bluetooth controller that was switched off can still be listed
         // (and opened) for a while: only take it if it answers.
         if info.transport == Transport::Bluetooth
@@ -221,6 +235,48 @@ fn read_calibration(dev: &mut dyn HidDevice, info: &DeviceInfo) -> Option<Calibr
     )
 }
 
+/// Configures a Switch Pro Controller (see [`SwitchInit`]) and returns its
+/// calibration, or `None` if it never answered.
+fn switch_setup(dev: &mut dyn HidDevice, info: &DeviceInfo) -> HidResult<Option<Calibration>> {
+    let mut init = SwitchInit::new(info.transport);
+    let mut out = [0u8; 64];
+    let mut buf = [0u8; READ_BUF_LEN];
+    let mut tries = 0;
+    while let Some(n) = init.request(&mut out) {
+        if let Err(HidError::Disconnected) = dev.write(&out[..n]) {
+            return Err(HidError::Disconnected);
+        }
+        if !init.expects_reply() {
+            init.skip();
+            continue;
+        }
+        let deadline = Instant::now() + Duration::from_millis(SWITCH_STEP_MS);
+        let mut done = false;
+        while let Some(left) = deadline.checked_duration_since(Instant::now()) {
+            match dev.read_timeout(&mut buf, left.as_millis().max(1) as i32) {
+                Ok(0) => {}
+                Ok(n) => {
+                    if init.on_report(&buf[..n]) {
+                        done = true;
+                        break;
+                    }
+                }
+                Err(_) => return Err(HidError::Disconnected),
+            }
+        }
+        if done {
+            tries = 0;
+        } else {
+            tries += 1;
+            if tries >= SWITCH_STEP_TRIES {
+                init.skip();
+                tries = 0;
+            }
+        }
+    }
+    Ok(init.answered().then(|| Calibration::switch(init.sticks)))
+}
+
 /// `true` if the controller sends an input report within [`PROBE_READ_MS`].
 fn answers_input(dev: &mut dyn HidDevice) -> bool {
     let mut buf = [0u8; READ_BUF_LEN];
@@ -231,7 +287,8 @@ fn answers_input(dev: &mut dyn HidDevice) -> bool {
 /// request (which also switches Bluetooth controllers back to full reports)
 /// or sends an input report.
 fn still_alive(dev: &mut dyn HidDevice, info: &DeviceInfo) -> bool {
-    read_calibration(dev, info).is_some() || answers_input(dev)
+    // The Switch Pro Controller has no feature reports.
+    (!info.model.is_switch() && read_calibration(dev, info).is_some()) || answers_input(dev)
 }
 
 fn input_loop(
@@ -241,7 +298,8 @@ fn input_loop(
     inline_writes: bool,
 ) {
     let _priority = crate::priority::boost_current_thread();
-    let parser = InputParser::new(shared.info.model, shared.info.transport);
+    let mut parser = InputParser::new(shared.info.model, shared.info.transport);
+    parser.sticks = shared.calibration.sticks;
     let mut builder = OutputBuilder::new(shared.info.model, shared.info.transport);
     let mut state = ControllerState::default();
     let mut buf = [0u8; READ_BUF_LEN];
@@ -297,12 +355,21 @@ fn input_loop(
 
 fn writer_loop(shared: Arc<ControllerShared>, mut dev: Box<dyn HidDevice>) {
     let mut builder = OutputBuilder::new(shared.info.model, shared.info.transport);
+    let refresh_rumble = shared.info.model.is_switch();
+    let mut last: Option<OutputState> = None;
     loop {
+        let rumbling =
+            refresh_rumble && last.is_some_and(|o| o.rumble_strong != 0 || o.rumble_weak != 0);
+        let wait = if rumbling {
+            SWITCH_RUMBLE_REFRESH
+        } else {
+            WRITER_IDLE
+        };
         let out = {
             let slot = shared.output.lock().unwrap();
             let mut slot = shared
                 .output_changed
-                .wait_timeout_while(slot, Duration::from_millis(500), |s| {
+                .wait_timeout_while(slot, wait, |s| {
                     !s.dirty && !shared.stop.load(Ordering::Acquire)
                 })
                 .unwrap()
@@ -312,9 +379,14 @@ fn writer_loop(shared: Arc<ControllerShared>, mut dev: Box<dyn HidDevice>) {
             }
             match ControllerShared::take_output(&mut slot) {
                 Some(out) => out,
+                None if rumbling => match last {
+                    Some(out) => out,
+                    None => continue,
+                },
                 None => continue,
             }
         };
+        last = Some(out);
         if let Err(HidError::Disconnected) = dev.write(builder.build(&out)) {
             return;
         }

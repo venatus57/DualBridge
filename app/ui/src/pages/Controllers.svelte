@@ -23,6 +23,7 @@
         <ol>
           <li><span class="n mono">01</span>{t("controllers.empty.ds5")}</li>
           <li><span class="n mono">02</span>{t("controllers.empty.ds4")}</li>
+          <li><span class="n mono">03</span>{t("controllers.empty.switch")}</li>
         </ol>
         <p class="muted">{t("controllers.empty.then")}</p>
       </div>

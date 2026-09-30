@@ -13,19 +13,20 @@ pub fn enabled() -> bool {
         || std::env::var("DUALBRIDGE_DEMO").is_ok_and(|v| v != "0" && !v.is_empty())
 }
 
-/// Creates a backend with two simulated controllers and starts feeding them.
+/// Creates a backend with three simulated controllers and starts feeding them.
 pub fn backend() -> MockBackend {
     let backend = MockBackend::default();
     let dualsense = backend.add(Model::DualSense, Transport::Usb, "DEMO-DUALSENSE");
     let ds4 = backend.add(Model::DualShock4, Transport::Bluetooth, "DEMO-DS4");
+    let pro = backend.add(Model::SwitchPro, Transport::Bluetooth, "DEMO-SWITCH");
     std::thread::Builder::new()
         .name("dualbridge-demo".into())
-        .spawn(move || simulate(dualsense, ds4))
+        .spawn(move || simulate(dualsense, ds4, pro))
         .expect("spawn demo thread");
     backend
 }
 
-fn simulate(dualsense: MockController, ds4: MockController) {
+fn simulate(dualsense: MockController, ds4: MockController, pro: MockController) {
     let start = Instant::now();
     let mut counter = 0u8;
     loop {
@@ -33,6 +34,7 @@ fn simulate(dualsense: MockController, ds4: MockController) {
         counter = counter.wrapping_add(1);
         dualsense.push_report(&dualsense_usb(t, counter));
         ds4.push_report(&ds4_bt(t + 1.7, counter));
+        pro.push_report(&switch_bt(t + 3.1, counter));
         // ~250 Hz like a real controller over USB.
         std::thread::sleep(Duration::from_millis(4));
     }
@@ -130,6 +132,39 @@ fn ds4_bt(t: f32, counter: u8) -> [u8; 78] {
     r
 }
 
+/// Switch Pro Controller `0x30` report (sticks use the default calibration:
+/// center 2048, reach 1400).
+fn switch_bt(t: f32, counter: u8) -> [u8; 64] {
+    let s = sim(t);
+    let mut r = [0u8; 64];
+    r[0] = 0x30;
+    r[1] = counter;
+    r[2] = 0x60; // ~70 %, on battery
+                 // PlayStation face bits (square, cross, circle, triangle) to the Switch
+                 // buttons in the same positions (Y, B, A, X).
+    let face = s.face & 0xF0;
+    r[3] = [(0x10, 0x01), (0x20, 0x04), (0x40, 0x08), (0x80, 0x02)]
+        .iter()
+        .filter(|(ps, _)| face & ps != 0)
+        .fold(0, |acc, (_, sw)| acc | sw);
+    if s.r2 > 0 {
+        r[3] |= 0x80;
+    }
+    let stick = |x: u8, y: u8| {
+        let raw = |v: u8| (2048 + (v as i32 - 128) * 1400 / 128).clamp(0, 4095) as u16;
+        // The Switch reports y growing upward.
+        let (x, y) = (raw(x), raw(255 - y));
+        [
+            (x & 0xFF) as u8,
+            ((x >> 8) as u8 & 0x0F) | ((y as u8 & 0x0F) << 4),
+            (y >> 4) as u8,
+        ]
+    };
+    r[6..9].copy_from_slice(&stick(s.lx, s.ly));
+    r[9..12].copy_from_slice(&stick(s.rx, s.ry));
+    r
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -147,5 +182,9 @@ mod tests {
             .parse(&ds4_bt(1.0, 1), &mut s)
             .unwrap();
         assert_eq!(s.battery.percent, 15);
+        InputParser::new(Model::SwitchPro, Transport::Bluetooth)
+            .parse(&switch_bt(1.0, 1), &mut s)
+            .unwrap();
+        assert_eq!(s.battery.percent, 70);
     }
 }

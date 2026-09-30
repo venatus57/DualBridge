@@ -18,6 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::crc;
 use crate::device::{Model, Transport};
 use crate::state::Motion;
+use crate::switch::StickCalibration;
 
 pub const FEATURE_DS4_USB: u8 = 0x02;
 pub const FEATURE_DS4_BT: u8 = 0x05;
@@ -61,6 +62,9 @@ pub struct Calibration {
     pub gyro: [AxisCalibration; 3],
     /// Raw to g: x, y, z.
     pub accel: [AxisCalibration; 3],
+    /// Stick centers and ranges (Switch Pro Controller only).
+    #[serde(default)]
+    pub sticks: StickCalibration,
 }
 
 /// Nominal sensitivities, used when a controller reports no usable calibration.
@@ -80,6 +84,20 @@ impl Default for Calibration {
         Calibration {
             gyro: [gyro; 3],
             accel: [accel; 3],
+            sticks: StickCalibration::default(),
+        }
+    }
+}
+
+impl Calibration {
+    /// Nominal motion calibration of the Switch Pro Controller (±2000 deg/s
+    /// gyro, ±8 g accelerometer) with the given stick calibration.
+    pub fn switch(sticks: StickCalibration) -> Calibration {
+        let axis = |scale| AxisCalibration { bias: 0.0, scale };
+        Calibration {
+            gyro: [axis(0.061); 3],
+            accel: [axis(1.0 / 4096.0); 3],
+            sticks,
         }
     }
 }

@@ -3,7 +3,10 @@
 use std::collections::HashMap;
 use std::ffi::CString;
 
-use dualbridge_core::device::{normalize_mac, parse_usb_mac, usb_mac_feature_report, SONY_VID};
+use dualbridge_core::device::{
+    normalize_mac, parse_usb_mac, usb_mac_feature_report, NINTENDO_VID, PID_SWITCH_PRO, SONY_VID,
+};
+use dualbridge_core::switch;
 use dualbridge_core::{Model, Transport};
 use hidapi::{BusType, HidApi};
 
@@ -34,6 +37,9 @@ impl HidBackend for HidapiBackend {
     fn enumerate(&mut self) -> HidResult<Vec<DeviceInfo>> {
         self.api.reset_devices().map_err(other)?;
         self.api.add_devices(SONY_VID, 0).map_err(other)?;
+        self.api
+            .add_devices(NINTENDO_VID, PID_SWITCH_PRO)
+            .map_err(other)?;
         let mut out: Vec<DeviceInfo> = Vec::new();
         let mut usb_to_identify = Vec::new();
         for d in self.api.device_list() {
@@ -98,11 +104,25 @@ impl HidapiBackend {
             return mac.clone();
         }
         let mac = self.open_device(info).ok().and_then(|dev| {
-            let (id, len) = usb_mac_feature_report(info.model);
             let mut buf = [0u8; 64];
-            buf[0] = id;
-            let n = dev.get_feature_report(&mut buf[..len]).ok()?;
-            parse_usb_mac(info.model, &buf[..n])
+            match usb_mac_feature_report(info.model) {
+                Some((id, len)) => {
+                    buf[0] = id;
+                    let n = dev.get_feature_report(&mut buf[..len]).ok()?;
+                    parse_usb_mac(info.model, &buf[..n])
+                }
+                // Switch Pro Controller: ask for its status over USB.
+                None => {
+                    dev.write(&switch::USB_STATUS_REQUEST).ok()?;
+                    for _ in 0..10 {
+                        let n = dev.read_timeout(&mut buf, 50).ok()?;
+                        if let Some(mac) = switch::parse_usb_status_mac(&buf[..n]) {
+                            return Some(mac);
+                        }
+                    }
+                    None
+                }
+            }
         });
         self.usb_macs.insert(info.path.clone(), mac.clone());
         mac

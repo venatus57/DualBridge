@@ -53,6 +53,15 @@ For each of DualShock 4 (v1 / v2) and DualSense (and Edge if available):
 - [ ] Adaptive trigger effects (resistance, gun trigger, vibration) are felt
       on L2/R2 over USB and Bluetooth.
 
+## Switch Pro Controller
+- [ ] Detected over USB and over Bluetooth (pairing: hold the sync button on top)
+- [ ] USB: the controller is used over the cable (handshake), not Bluetooth; plugging it in while paired shows one controller, not two
+- [ ] Sticks centered at rest and reaching the edges (calibration read from the controller)
+- [ ] Buttons by position: bottom (B) = Xbox A, right (A) = Xbox B, left (Y) = X, top (X) = Y; ZL/ZR as full triggers; Home = Guide; Capture = Back
+- [ ] Battery level shown; charging shown on the cable
+- [ ] Player LEDs show the controller number; "Identify" blinks them
+- [ ] Rumble in a game is felt, keeps going during long effects, and stops when it should
+
 ## macOS
 
 - [ ] The `.dmg` opens; the app starts after allowing it in Privacy & Security.

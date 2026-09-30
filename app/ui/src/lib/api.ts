@@ -118,8 +118,13 @@ function demoRender(l: LightingConfig, t: number, slot: number, battery: number)
 function createDemoApi(): Api {
   const settings: Settings = defaultSettings();
   const start = performance.now();
-  const identities = ["DEMO-DUALSENSE", "DEMO-DS4"];
-  const order = [0, 1];
+  const identities = ["DEMO-DUALSENSE", "DEMO-DS4", "DEMO-SWITCH"];
+  const kinds = [
+    { model: "dual_sense", name: "DualSense", transport: "usb", battery: 76, charging: "charging" },
+    { model: "dual_shock4", name: "DualShock 4", transport: "bluetooth", battery: 14, charging: "discharging" },
+    { model: "switch_pro", name: "Pro Controller", transport: "bluetooth", battery: 70, charging: "discharging" },
+  ] as const;
+  const order = [0, 1, 2];
 
   const controllers = (): ControllerView[] => {
     const t = performance.now() - start;
@@ -129,19 +134,19 @@ function createDemoApi(): Api {
       const slot = idx + 1;
       const profileName = settings.assignments[identity] ?? settings.profiles[0].name;
       const profile = settings.profiles.find((p) => p.name === profileName) ?? settings.profiles[0];
-      const ds = i === 0;
-      const battery = ds ? 76 : 14;
+      const k = kinds[i];
+      const battery = k.battery;
       const ax = (v: number) => Math.round(128 + Math.max(-1, Math.min(1, v)) * 127);
       const names = ["cross", "circle", "square", "triangle", "l1", "r1", "dpad_up", "dpad_right"];
       const pressed = [names[Math.floor(s / 0.4 + i * 3) % names.length]];
       return {
         slot,
         identity,
-        name: settings.controller_names[identity] ?? (ds ? "DualSense" : "DualShock 4"),
-        model: ds ? "dual_sense" : "dual_shock4",
-        model_name: ds ? "DualSense" : "DualShock 4",
-        transport: ds ? "usb" : "bluetooth",
-        battery: { percent: battery, charging: ds ? "charging" : "discharging", cable: ds },
+        name: settings.controller_names[identity] ?? k.name,
+        model: k.model,
+        model_name: k.name,
+        transport: k.transport,
+        battery: { percent: battery, charging: k.charging, cable: k.transport === "usb" },
         lightbar: demoRender(settings.controller_lighting[identity] ?? profile.lighting, t, slot, battery),
         profile: profile.name,
         input: {

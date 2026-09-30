@@ -2,7 +2,8 @@
   import type { InputView } from "../types";
   import Glyph from "./Glyph.svelte";
 
-  let { input, touchpad = [1920, 942] }: { input: InputView; touchpad?: [number, number] } = $props();
+  // `touchpad` is null for controllers without one (Switch Pro).
+  let { input, touchpad = [1920, 942] }: { input: InputView; touchpad?: [number, number] | null } = $props();
 
   const has = (b: string) => input.buttons.includes(b);
   const pos = (v: number) => ((v - 128) / 128) * 14;
@@ -33,13 +34,21 @@
     <div class="dot" class:on={has("l3")} style="transform:translate({pos(input.lx)}px,{pos(input.ly)}px)"></div>
   </div>
 
-  <div class="touchpad bevel" class:on={has("touchpad")}>
-    {#each input.touch as f, i (i)}
-      {#if f.active}
-        <div class="finger" style="left:{(f.x / touchpad[0]) * 100}%;top:{(f.y / touchpad[1]) * 100}%"></div>
-      {/if}
-    {/each}
-  </div>
+  {#if touchpad}
+    {@const [tw, th] = touchpad}
+    <div class="touchpad bevel" class:on={has("touchpad")}>
+      {#each input.touch as f, i (i)}
+        {#if f.active}
+          <div class="finger" style="left:{(f.x / tw) * 100}%;top:{(f.y / th) * 100}%"></div>
+        {/if}
+      {/each}
+    </div>
+  {:else}
+    <div class="no-touchpad" aria-hidden="true">
+      <span class="home" class:on={has("ps")}></span>
+      <span class="capture" class:on={has("touchpad")}></span>
+    </div>
+  {/if}
 
   <div class="stick" title="R">
     <div class="dot" class:on={has("r3")} style="transform:translate({pos(input.rx)}px,{pos(input.ry)}px)"></div>
@@ -154,6 +163,29 @@
   .touchpad.on {
     border-color: var(--hi);
     box-shadow: inset 0 0 14px color-mix(in srgb, var(--hi) 40%, transparent);
+  }
+  .no-touchpad {
+    flex: 1;
+    min-width: 60px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 18px;
+  }
+  .no-touchpad span {
+    width: 14px;
+    height: 14px;
+    background: var(--panel-2);
+    border: 1px solid var(--line-2);
+  }
+  .no-touchpad .home {
+    border-radius: 50%;
+  }
+  .no-touchpad .on {
+    background: var(--hi);
+    border-color: var(--hi);
+    box-shadow: 0 0 8px var(--hi);
   }
   .finger {
     position: absolute;

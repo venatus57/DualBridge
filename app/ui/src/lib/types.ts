@@ -118,7 +118,7 @@ export interface Settings {
   controller_lighting: Record<string, LightingConfig>;
 }
 
-export type Model = "dual_shock4" | "dual_sense" | "dual_sense_edge";
+export type Model = "dual_shock4" | "dual_sense" | "dual_sense_edge" | "switch_pro";
 export type Transport = "usb" | "bluetooth";
 
 export interface Battery {

@@ -76,7 +76,7 @@
         {/if}
       {:else if step === 2}
         <h1>{t("welcome.step3.title")}</h1>
-        <PadGraphic color={found ? found.lightbar : "#39414f"} dualsense={found ? found.model !== "dual_shock4" : true} width={220} />
+        <PadGraphic color={found ? found.lightbar : "#39414f"} dualsense={found ? found.model !== "dual_shock4" : true} switchPro={found?.model === "switch_pro"} width={220} />
         {#if found}
           <p class="status ok"><Icon name="check" size={20} /> {t("welcome.step3.found", { name: found.model_name })}</p>
         {:else}
@@ -84,6 +84,7 @@
           <ul class="muted small">
             <li>{t("controllers.empty.ds5")}</li>
             <li>{t("controllers.empty.ds4")}</li>
+            <li>{t("controllers.empty.switch")}</li>
           </ul>
         {/if}
       {:else if step === 3}

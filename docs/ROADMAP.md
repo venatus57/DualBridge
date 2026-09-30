@@ -95,6 +95,10 @@ app/
 - [ ] Touchpad as mouse
 - [ ] Gyro aiming (gyro to mouse or right stick)
 
+### M6b — Nintendo controllers
+- [x] Switch Pro Controller (USB and Bluetooth): setup sequence, full reports, stick calibration from SPI flash, HD rumble, player LEDs
+- [ ] Joy-Con (single and paired) and the charging grip
+
 ### M7 — macOS
 The shared code (lighting, battery, profiles) already builds for macOS; nothing here is verified on hardware yet.
 

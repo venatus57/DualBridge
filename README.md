@@ -8,7 +8,7 @@ DualBridge is an independent, open-source project inspired by DS4Windows. It is 
 
 ## Planned features
 
-- **PS4 (DualShock 4) and PS5 (DualSense)** controllers, over USB and Bluetooth
+- **PS4 (DualShock 4) and PS5 (DualSense)** controllers, over USB and Bluetooth — and the **Nintendo Switch Pro Controller**
 - **Several controllers at once** — each one gets its own slot, color, and profile
 - **Works in every game on Windows** by exposing a virtual Xbox controller
 - **Minimal latency** — a dedicated high-priority input path, with a target of under 1 ms added by the software
@@ -79,7 +79,7 @@ Issues and pull requests are welcome. Since the maintainers can't test every con
 
 ## Français
 
-**DualBridge** permet d'utiliser les manettes PlayStation (DualShock 4 et DualSense) sur Windows et macOS, avec une interface simple, plusieurs manettes en même temps et beaucoup d'options pour la lumière.
+**DualBridge** permet d'utiliser les manettes PlayStation (DualShock 4 et DualSense) et le Pro Controller de la Switch sur Windows et macOS, avec une interface simple, plusieurs manettes en même temps et beaucoup d'options pour la lumière.
 
 > **Statut : en début de développement, pas encore testé sur de vraies manettes.** Les premières versions sont disponibles dans le [workflow Installers](https://github.com/venatus57/DualBridge/actions/workflows/release.yml) (dernière exécution, puis *Artifacts*). Voir la [feuille de route](docs/ROADMAP.md).
 

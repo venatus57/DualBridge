@@ -12,7 +12,9 @@
   let renaming = $state(false);
   let newName = $state("");
 
-  const dualsense = $derived(c.model !== "dual_shock4");
+  const touchpad = $derived<[number, number] | null>(
+    c.model === "switch_pro" ? null : c.model === "dual_shock4" ? [1920, 942] : [1920, 1080],
+  );
   const battery = $derived(c.battery);
   const batteryClass = $derived(
     battery.charging === "error" ? "bad" : battery.percent <= 15 && battery.charging === "discharging" ? "bad" : battery.percent <= 30 ? "warn" : "ok",
@@ -92,7 +94,7 @@
     </div>
   </header>
 
-  <LiveInput input={c.input} touchpad={dualsense ? [1920, 1080] : [1920, 942]} />
+  <LiveInput input={c.input} {touchpad} />
 
   <div class="controls">
     <label class="profile">

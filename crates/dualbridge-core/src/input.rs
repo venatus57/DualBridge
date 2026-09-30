@@ -1,4 +1,5 @@
-//! Input report parsing for the DualShock 4 and the DualSense.
+//! Input report parsing for the DualShock 4 and the DualSense (the Switch Pro
+//! Controller is handled in [`crate::switch`]).
 //!
 //! Report layouts (offsets are relative to the first data byte, after the
 //! report ID and any Bluetooth header):
@@ -20,6 +21,7 @@
 use crate::crc;
 use crate::device::{Model, Transport};
 use crate::state::{Battery, Buttons, Charging, ControllerState, Touch};
+use crate::switch::{self, StickCalibration};
 
 /// DS4 USB input report, and the "simple" Bluetooth report of both models.
 pub const REPORT_BASIC: u8 = 0x01;
@@ -52,6 +54,8 @@ pub struct InputParser {
     pub transport: Transport,
     /// Check the CRC32 of full Bluetooth reports and reject corrupted ones.
     pub verify_crc: bool,
+    /// Stick calibration (Switch Pro Controller only).
+    pub sticks: StickCalibration,
 }
 
 impl InputParser {
@@ -60,6 +64,7 @@ impl InputParser {
             model,
             transport,
             verify_crc: true,
+            sticks: StickCalibration::default(),
         }
     }
 
@@ -70,6 +75,13 @@ impl InputParser {
     /// previous value.
     pub fn parse(&self, report: &[u8], state: &mut ControllerState) -> Result<(), ParseError> {
         let id = *report.first().ok_or(ParseError::Empty)?;
+        if self.model.is_switch() {
+            return if switch::parse(report, &self.sticks, state) {
+                Ok(())
+            } else {
+                Err(ParseError::UnknownReport(id))
+            };
+        }
         match (self.model.is_dualsense(), self.transport, id) {
             (false, Transport::Usb, REPORT_BASIC) => {
                 let r = require(report, USB_REPORT_LEN)?;

@@ -5,7 +5,7 @@ use std::time::Duration;
 
 use dualbridge_core::color::Rgb;
 use dualbridge_core::crc;
-use dualbridge_core::output::OutputState;
+use dualbridge_core::output::{OutputState, PlayerLeds};
 use dualbridge_core::state::Buttons;
 use dualbridge_core::{ControllerState, Model, Transport};
 use dualbridge_hid::manager::{ControllerManager, ManagerEvent, MAX_SLOTS};
@@ -260,6 +260,96 @@ fn eight_slots_max_and_duplicates() {
         .unwrap()
         .iter()
         .any(|e| matches!(e, ManagerEvent::Duplicate { .. })));
+}
+
+/// A Switch Pro Controller `0x30` report with B (bottom face button) held.
+fn switch_report(pressed: bool) -> Vec<u8> {
+    let mut r = vec![0u8; 64];
+    r[0] = 0x30;
+    r[2] = 0x80; // battery full
+    r[3] = if pressed { 0x04 } else { 0 };
+    // Both sticks centered (2048, 2048).
+    for at in [6, 9] {
+        r[at..at + 3].copy_from_slice(&[0x00, 0x08, 0x80]);
+    }
+    r
+}
+
+#[test]
+fn switch_pro_controller_is_set_up_and_read() {
+    for transport in [Transport::Bluetooth, Transport::Usb] {
+        let backend = MockBackend::default();
+        let pad = backend.add(Model::SwitchPro, transport, "sw");
+        let (mut m, rx) = manager(&backend);
+        assert_eq!(connected_slots(&m.poll().unwrap()), vec![1]);
+
+        // Setup: USB handshake (USB only), then full reports, IMU,
+        // vibration and the two stick calibration reads.
+        let written = pad.written();
+        let subcommands: Vec<u8> = written
+            .iter()
+            .filter(|w| w[0] == 0x01)
+            .map(|w| w[10])
+            .collect();
+        assert_eq!(&subcommands[..5], &[0x03, 0x40, 0x48, 0x10, 0x10]);
+        let usb_commands = written.iter().filter(|w| w[0] == 0x80).count();
+        assert_eq!(
+            usb_commands,
+            if transport == Transport::Usb { 5 } else { 0 }
+        );
+
+        pad.push_report(&switch_report(true));
+        let (_, state) = loop {
+            let (slot, state) = rx.recv_timeout(WAIT).unwrap();
+            // Skip the subcommand replies that are also parsed as input.
+            if state.full {
+                break (slot, state);
+            }
+        };
+        assert!(state.buttons.contains(Buttons::CROSS));
+        assert_eq!((state.left_stick.x, state.left_stick.y), (128, 128));
+        assert_eq!(state.battery.percent, 100);
+
+        // Player lights are sent as a subcommand when they change.
+        let lights = |n: usize| {
+            let written = pad.wait_written(n, WAIT);
+            written
+                .iter()
+                .filter(|w| w[0] == 0x01 && w[10] == 0x30)
+                .map(|w| w[11])
+                .collect::<Vec<u8>>()
+        };
+        let before = pad.written().len();
+        m.get(1)
+            .unwrap()
+            .update_output(|o| o.player_leds = PlayerLeds::for_player(1));
+        let start = std::time::Instant::now();
+        while lights(before + 1).last() != Some(&0b0001) {
+            assert!(start.elapsed() < WAIT, "player lights not sent");
+            std::thread::sleep(Duration::from_millis(5));
+        }
+    }
+}
+
+#[test]
+fn switch_rumble_is_refreshed_while_active() {
+    let backend = MockBackend::default();
+    let pad = backend.add(Model::SwitchPro, Transport::Bluetooth, "sw");
+    let (mut m, _rx) = manager(&backend);
+    m.poll().unwrap();
+    let shared = m.get(1).unwrap().clone();
+    let before = pad.wait_written(6, WAIT).len();
+    shared.update_output(|o| o.rumble_strong = 200);
+    // Without any change, the rumble keeps being resent.
+    let written = pad.wait_written(before + 5, WAIT);
+    assert!(written[before..]
+        .iter()
+        .all(|w| w[2..6] != [0x00, 0x01, 0x40, 0x40]));
+    shared.update_output(|o| o.rumble_strong = 0);
+    std::thread::sleep(Duration::from_millis(100));
+    let n = pad.written().len();
+    std::thread::sleep(Duration::from_millis(150));
+    assert_eq!(pad.written().len(), n);
 }
 
 #[test]

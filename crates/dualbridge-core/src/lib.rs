@@ -12,6 +12,7 @@
 //! - [`profile`]: saved per-controller / per-game settings
 //! - [`calibration`]: motion sensor calibration from feature reports
 //! - [`crc`]: the CRC32 used by Bluetooth reports
+//! - [`switch`]: the Nintendo Switch Pro Controller protocol
 //!
 //! The parsing and building functions never allocate: they work on caller
 //! provided buffers so they can run on the latency-critical input thread.
@@ -26,6 +27,7 @@ pub mod mapping;
 pub mod output;
 pub mod profile;
 pub mod state;
+pub mod switch;
 
 pub use color::Rgb;
 pub use device::{Model, Transport};

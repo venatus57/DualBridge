@@ -12,10 +12,12 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
 use dualbridge_core::calibration::{feature_report_id, feature_report_len};
-use dualbridge_core::device::{PID_DS4_V2, PID_DUALSENSE, PID_DUALSENSE_EDGE, SONY_VID};
 use dualbridge_core::{Model, Transport};
 
 use crate::{DeviceInfo, HidBackend, HidDevice, HidError, HidResult};
+
+/// Answers written output reports, like a controller replying to commands.
+type Responder = Box<dyn Fn(&[u8]) -> Option<Vec<u8>> + Send>;
 
 #[derive(Default)]
 struct MockState {
@@ -28,6 +30,7 @@ struct MockState {
     /// Switched off but still listed, like a Bluetooth controller on Windows:
     /// reads time out and feature requests fail.
     silent: bool,
+    responder: Option<Responder>,
 }
 
 struct MockShared {
@@ -58,6 +61,12 @@ impl MockController {
     pub fn set_feature_report(&self, report: &[u8]) {
         let mut s = self.shared.state.lock().unwrap();
         s.features.insert(report[0], report.to_vec());
+    }
+
+    /// Answers every output report written from now on with `f`'s report,
+    /// if any.
+    pub fn set_responder(&self, f: impl Fn(&[u8]) -> Option<Vec<u8>> + Send + 'static) {
+        self.shared.state.lock().unwrap().responder = Some(Box::new(f));
     }
 
     /// Output reports written to the device so far.
@@ -120,11 +129,7 @@ pub struct MockBackend {
 impl MockBackend {
     /// Adds a connected controller. `serial` doubles as its identity.
     pub fn add(&self, model: Model, transport: Transport, serial: &str) -> MockController {
-        let product_id = match model {
-            Model::DualShock4 => PID_DS4_V2,
-            Model::DualSense => PID_DUALSENSE,
-            Model::DualSenseEdge => PID_DUALSENSE_EDGE,
-        };
+        let (vendor_id, product_id) = model.ids();
         let mut devices = self.devices.lock().unwrap();
         let info = DeviceInfo {
             path: format!(
@@ -132,30 +137,63 @@ impl MockBackend {
                 devices.len(),
                 transport_name(transport)
             ),
-            vendor_id: SONY_VID,
+            vendor_id,
             product_id,
             serial: Some(serial.to_string()),
             model,
             transport,
         };
-        // Answer the calibration request like a real controller would.
-        let mut calibration = vec![0u8; feature_report_len(model, transport)];
-        calibration[0] = feature_report_id(model, transport);
-        if transport == Transport::Bluetooth {
-            dualbridge_core::crc::sign(dualbridge_core::crc::SEED_FEATURE, &mut calibration);
+        let mut state = MockState {
+            connected: true,
+            ..MockState::default()
+        };
+        if model.is_switch() {
+            // Acknowledge setup commands like a Pro Controller.
+            state.responder = Some(Box::new(switch_reply));
+        } else {
+            // Answer the calibration request like a real controller would.
+            let mut calibration = vec![0u8; feature_report_len(model, transport)];
+            calibration[0] = feature_report_id(model, transport);
+            if transport == Transport::Bluetooth {
+                dualbridge_core::crc::sign(dualbridge_core::crc::SEED_FEATURE, &mut calibration);
+            }
+            state.features.insert(calibration[0], calibration);
         }
         let shared = Arc::new(MockShared {
             info,
-            state: Mutex::new(MockState {
-                connected: true,
-                features: HashMap::from([(calibration[0], calibration)]),
-                ..MockState::default()
-            }),
+            state: Mutex::new(state),
             cond: Condvar::new(),
         });
         devices.push(shared.clone());
         MockController { shared }
     }
+}
+
+/// A Switch Pro Controller's reply to a USB command or a subcommand (with
+/// blank flash contents, so default stick calibration).
+fn switch_reply(out: &[u8]) -> Option<Vec<u8>> {
+    use dualbridge_core::switch::{OUT_SUBCOMMAND, OUT_USB, REPORT_REPLY, REPORT_USB_REPLY};
+    let mut r = vec![0u8; 64];
+    match out {
+        [OUT_USB, 0x04, ..] => return None,
+        [OUT_USB, cmd, ..] => {
+            r[0] = REPORT_USB_REPLY;
+            r[1] = *cmd;
+        }
+        [OUT_SUBCOMMAND, ..] if out.len() > 10 => {
+            r[0] = REPORT_REPLY;
+            r[13] = 0x80;
+            r[14] = out[10];
+            // SPI reads echo the address and size, then (blank) data.
+            if out[10] == 0x10 {
+                r[13] = 0x90;
+                r[15..20].copy_from_slice(&out[11..16]);
+                r[20..].fill(0xFF);
+            }
+        }
+        _ => return None,
+    }
+    Some(r)
 }
 
 fn transport_name(t: Transport) -> &'static str {
@@ -233,6 +271,9 @@ impl HidDevice for MockDevice {
             return Err(HidError::Disconnected);
         }
         s.written.push(report.to_vec());
+        if let Some(reply) = s.responder.as_ref().and_then(|f| f(report)) {
+            s.reports.push_back(reply);
+        }
         self.shared.cond.notify_all();
         Ok(report.len())
     }

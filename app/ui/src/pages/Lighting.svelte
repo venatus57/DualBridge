@@ -199,6 +199,12 @@
     </div>
   {/if}
 
+  {#if target?.model === "switch_pro"}
+    <div class="notice custom">
+      <p>{t("lighting.noLightbar")}</p>
+    </div>
+  {/if}
+
   {#if target && !own}
     <div class="notice">
       <p>{t("lighting.follows", { profile: target.profile })}</p>
@@ -221,7 +227,7 @@
       </div>
       <div class="stage">
         <div class="spill"></div>
-        <PadGraphic color={previewColor} dualsense={true} playerLeds={previewLeds} width={290} />
+        <PadGraphic color={previewColor} dualsense={true} switchPro={target?.model === "switch_pro"} playerLeds={previewLeds} width={290} />
         <div class="floor"></div>
       </div>
       {#if lighting.effect.type === "battery_level" || lighting.low_battery.enabled || lighting.player_leds.type === "battery"}
