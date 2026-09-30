@@ -4,7 +4,7 @@
 
 > **Status: early development, not yet tested on real controllers.** The first builds are available from the [Installers workflow](https://github.com/venatus57/DualBridge/actions/workflows/release.yml) (open the latest run, then *Artifacts*). See the [roadmap](docs/ROADMAP.md) for what's done and the [hardware test checklist](docs/hardware-testing.md) if you want to help.
 
-DualBridge is an independent, open-source project inspired by DS4Windows. It is not affiliated with DS4Windows, Sony, Microsoft, or Apple.
+DualBridge is an independent, open-source project inspired by DS4Windows. It is not affiliated with DS4Windows, Sony, Nintendo, Microsoft, or Apple.
 
 ## Planned features
 
@@ -83,4 +83,4 @@ Issues and pull requests are welcome. Since the maintainers can't test every con
 
 > **Statut : en début de développement, pas encore testé sur de vraies manettes.** Les premières versions sont disponibles dans le [workflow Installers](https://github.com/venatus57/DualBridge/actions/workflows/release.yml) (dernière exécution, puis *Artifacts*). Voir la [feuille de route](docs/ROADMAP.md).
 
-Projet indépendant et open source inspiré de DS4Windows, sans lien avec DS4Windows, Sony, Microsoft ou Apple.
+Projet indépendant et open source inspiré de DS4Windows, sans lien avec DS4Windows, Sony, Nintendo, Microsoft ou Apple.
