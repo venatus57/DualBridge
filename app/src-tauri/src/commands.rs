@@ -7,10 +7,11 @@ use dualbridge_core::profile::Profile;
 use dualbridge_core::state::{Battery, Charging};
 use dualbridge_virtual::{hidhide, BackendStatus};
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::engine::{ControllerView, Engine};
 use crate::settings::Settings;
+use crate::update::{self, UpdateInfo};
 
 type EngineState<'a> = State<'a, Arc<Engine>>;
 
@@ -135,6 +136,7 @@ pub struct PreferencesPatch {
     pub auto_profile_switch: Option<bool>,
     pub battery_saver: Option<bool>,
     pub idle_off_minutes: Option<u32>,
+    pub check_updates: Option<bool>,
 }
 
 #[tauri::command]
@@ -163,6 +165,9 @@ pub fn set_preferences(engine: EngineState, patch: PreferencesPatch) -> Result<S
         }
         if let Some(v) = patch.idle_off_minutes {
             s.idle_off_minutes = v;
+        }
+        if let Some(v) = patch.check_updates {
+            s.check_updates = v;
         }
         Ok(())
     })?;
@@ -193,6 +198,41 @@ pub fn power_off_controller(
     slot: u8,
 ) -> Result<(), crate::engine::PowerOffError> {
     engine.power_off(slot)
+}
+
+/// Looks for a newer release on GitHub (`None` when up to date). Never in
+/// demo mode.
+#[tauri::command]
+pub async fn check_update(engine: EngineState<'_>) -> Result<Option<UpdateInfo>, String> {
+    if engine.demo {
+        return Ok(None);
+    }
+    tauri::async_runtime::spawn_blocking(update::check)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Downloads the new version's installer (sending `update-progress` events
+/// with the percentage), starts it and quits so it can replace the app.
+#[tauri::command]
+pub async fn install_update(app: AppHandle, update: UpdateInfo) -> Result<(), String> {
+    let asset = update
+        .asset
+        .ok_or("no installer for this computer in this release")?;
+    let emitter = app.clone();
+    let path = tauri::async_runtime::spawn_blocking(move || {
+        update::download(&asset, |pct| {
+            let _ = emitter.emit("update-progress", pct);
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    update::launch(&path)?;
+    if let Some(engine) = app.try_state::<Arc<Engine>>() {
+        engine.shutdown();
+    }
+    app.exit(0);
+    Ok(())
 }
 
 /// Switches every wireless controller off; returns how many.

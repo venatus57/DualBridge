@@ -2,7 +2,8 @@
   import { onMount } from "svelte";
   import Glyph, { type Shape } from "./lib/components/Glyph.svelte";
   import { t, type Key } from "./lib/i18n.svelte";
-  import { app, init, type Page } from "./lib/store.svelte";
+  import { api } from "./lib/api";
+  import { app, init, installUpdate, type Page } from "./lib/store.svelte";
   import Controllers from "./pages/Controllers.svelte";
   import Lighting from "./pages/Lighting.svelte";
   import Profiles from "./pages/Profiles.svelte";
@@ -91,6 +92,28 @@
 
   <main>
     <div class="ambient" aria-hidden="true"></div>
+    {#if app.update}
+      <div class="update" role="status">
+        <div class="update-text">
+          <b>{t("update.available", { v: app.update.version })}</b>
+          {#if app.updateProgress !== null}
+            <span>{t("update.downloading", { p: app.updateProgress })}</span>
+            <div class="bar"><div style="width:{app.updateProgress}%"></div></div>
+          {:else}
+            <span>{t("update.text")}</span>
+          {/if}
+        </div>
+        {#if app.updateProgress === null}
+          <button class="ghost" onclick={() => api.openUrl(app.update!.page)}>{t("update.notes")}</button>
+          <button class="ghost" onclick={() => (app.update = null)}>{t("update.later")}</button>
+          {#if app.update.asset}
+            <button class="primary" onclick={installUpdate}>{t("update.install")}</button>
+          {:else}
+            <button class="primary" onclick={() => api.openUrl(app.update!.page)}>{t("update.noInstaller")}</button>
+          {/if}
+        {/if}
+      </div>
+    {/if}
     {#if app.overview?.conflicts?.length}
       <div class="conflict" role="alert">
         <b>{t("conflict.title", { names: app.overview.conflicts.join(", ") })}</b>
@@ -328,6 +351,42 @@
     pointer-events: none;
     z-index: -1;
     transition: background 0.8s;
+  }
+  .update {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 40px;
+    background: color-mix(in srgb, var(--accent) 12%, var(--bg));
+    border-bottom: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+  .update-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 0;
+  }
+  .update-text b {
+    color: var(--accent);
+  }
+  .update-text span {
+    color: var(--muted);
+    font-size: 13px;
+  }
+  .bar {
+    height: 4px;
+    max-width: 420px;
+    background: var(--panel-3);
+  }
+  .bar > div {
+    height: 100%;
+    background: var(--accent);
+    box-shadow: 0 0 8px var(--accent);
+    transition: width 0.2s;
   }
   .conflict {
     position: sticky;

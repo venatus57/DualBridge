@@ -1,7 +1,7 @@
 import { api } from "./api";
 import { defaultSettings } from "./defaults";
 import { setLanguage, t } from "./i18n.svelte";
-import type { ControllerView, LightingConfig, Overview, Profile, Settings } from "./types";
+import type { ControllerView, LightingConfig, Overview, Profile, Settings, UpdateInfo } from "./types";
 
 export type Page = "controllers" | "lighting" | "profiles" | "settings";
 
@@ -17,7 +17,35 @@ export const app = $state({
   lightingTarget: null as string | null,
   wizard: false,
   toast: null as { text: string; error: boolean } | null,
+  /** Newer release found, until installed or dismissed. */
+  update: null as UpdateInfo | null,
+  /** Download progress (0-100) while installing an update, else null. */
+  updateProgress: null as number | null,
 });
+
+const UPDATE_EVERY_MS = 6 * 60 * 60 * 1000;
+
+/** Looks for a new version. `manual` reports "up to date" and errors. */
+export async function checkForUpdate(manual = false) {
+  try {
+    const u = await api.checkUpdate();
+    app.update = u;
+    if (manual && !u) toast(t("update.upToDate"));
+  } catch (e) {
+    if (manual) toast(t("update.checkFailed", { msg: String(e) }), true);
+  }
+}
+
+export async function installUpdate() {
+  if (!app.update || app.updateProgress !== null) return;
+  app.updateProgress = 0;
+  try {
+    await api.installUpdate(app.update);
+  } catch (e) {
+    app.updateProgress = null;
+    toast(t("update.failed", { msg: String(e) }), true);
+  }
+}
 
 let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -57,6 +85,12 @@ export async function init() {
   app.editing = app.settings.profiles[0].name;
   app.wizard = !app.settings.first_run_done;
   await api.onControllers((list) => (app.controllers = list));
+  await api.onUpdateProgress((p) => (app.updateProgress = p));
+  const autoCheck = () => {
+    if (app.settings.check_updates) checkForUpdate();
+  };
+  setTimeout(autoCheck, 4000);
+  setInterval(autoCheck, UPDATE_EVERY_MS);
   await api.onConflicts((programs) => {
     if (app.overview) app.overview.conflicts = programs;
   });

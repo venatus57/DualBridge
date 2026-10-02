@@ -13,6 +13,10 @@ connection (USB / Bluetooth), and OS version.
 - [ ] It offers HidHide; installing it works (may need a restart).
 - [ ] The first-run assistant opens and shows the driver as installed.
 
+## Updates
+- [ ] With a newer release published on GitHub, the "new version" banner appears a few seconds after start; "Install" downloads it, starts the installer and closes DualBridge; the new version starts afterwards
+- [ ] Settings > About > "Check now" says "up to date" on the latest version
+
 ## Connection
 
 For each of DualShock 4 (v1 / v2) and DualSense (and Edge if available):

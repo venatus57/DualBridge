@@ -33,6 +33,8 @@ pub struct Settings {
     /// Switch profiles automatically when a game listed in a profile is in
     /// the foreground.
     pub auto_profile_switch: bool,
+    /// Look for a new version on GitHub at startup and every few hours.
+    pub check_updates: bool,
     /// Battery saver: lightbars off, player LEDs dimmed.
     pub battery_saver: bool,
     /// Switch wireless controllers off after this many minutes without being
@@ -61,6 +63,7 @@ impl Default for Settings {
             exclusive_mode: true,
             hidden_devices: BTreeSet::new(),
             auto_profile_switch: true,
+            check_updates: true,
             battery_saver: false,
             idle_off_minutes: 0,
             profiles: vec![Profile::default()],

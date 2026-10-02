@@ -5,7 +5,7 @@
   import PageHeader from "../lib/components/PageHeader.svelte";
   import Toggle from "../lib/components/Toggle.svelte";
   import { LANGUAGES, t } from "../lib/i18n.svelte";
-  import { app, change, refreshOverview } from "../lib/store.svelte";
+  import { app, change, checkForUpdate, refreshOverview } from "../lib/store.svelte";
 
   const s = $derived(app.settings);
   const o = $derived(app.overview);
@@ -124,8 +124,10 @@
     <h2>{t("settings.about")}</h2>
     <p>DualBridge — {t("settings.version", { v: o?.version ?? "" })}</p>
     <p class="muted small">{t("settings.license")}</p>
+    <Toggle label={t("settings.checkUpdates")} checked={s.check_updates} onchange={(v) => change(api.setPreferences({ check_updates: v }))} />
     <div class="row">
       <button onclick={() => api.openUrl(REPO)}><Icon name="link" size={14} /> {t("settings.github")}</button>
+      <button onclick={() => checkForUpdate(true)}>{t("settings.checkNow")}</button>
       <button onclick={() => (app.wizard = true)}>{t("settings.runWizard")}</button>
     </div>
   </div>

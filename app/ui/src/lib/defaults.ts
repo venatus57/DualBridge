@@ -65,6 +65,7 @@ export function defaultSettings(): Settings {
     exclusive_mode: true,
     hidden_devices: [],
     auto_profile_switch: true,
+    check_updates: true,
     battery_saver: false,
     idle_off_minutes: 0,
     profiles: [defaultProfile()],

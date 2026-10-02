@@ -112,6 +112,7 @@ export interface Settings {
   exclusive_mode: boolean;
   hidden_devices: string[];
   auto_profile_switch: boolean;
+  check_updates: boolean;
   battery_saver: boolean;
   /** 0 = never. */
   idle_off_minutes: number;
@@ -205,6 +206,14 @@ export interface PreferencesPatch {
   start_minimized?: boolean;
   exclusive_mode?: boolean;
   auto_profile_switch?: boolean;
+  check_updates?: boolean;
   battery_saver?: boolean;
   idle_off_minutes?: number;
+}
+
+/** A newer release found on GitHub. */
+export interface UpdateInfo {
+  version: string;
+  page: string;
+  asset: { name: string; url: string; size: number; sha256: string | null } | null;
 }

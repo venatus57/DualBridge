@@ -6,6 +6,7 @@ mod elevate;
 mod engine;
 mod foreground;
 mod settings;
+mod update;
 
 use std::sync::Arc;
 
@@ -151,6 +152,8 @@ pub fn run() {
             commands::identify_controller,
             commands::power_off_controller,
             commands::power_off_all,
+            commands::check_update,
+            commands::install_update,
             commands::reset_latency,
             commands::preview_lighting,
             commands::driver_status,

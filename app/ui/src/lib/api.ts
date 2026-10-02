@@ -11,6 +11,7 @@ import type {
   LightingConfig,
   Overview,
   PreferencesPatch,
+  UpdateInfo,
   Profile,
   Settings,
 } from "./types";
@@ -31,6 +32,11 @@ export interface Api {
   /** Rejects with a `PowerOffError` when the controller can't be switched off. */
   powerOff(slot: number): Promise<void>;
   powerOffAll(): Promise<number>;
+  /** A newer release, or null when up to date. */
+  checkUpdate(): Promise<UpdateInfo | null>;
+  /** Downloads and starts the installer; the app then quits. */
+  installUpdate(update: UpdateInfo): Promise<void>;
+  onUpdateProgress(cb: (percent: number) => void): Promise<() => void>;
   resetLatency(slot: number): Promise<void>;
   previewLighting(lighting: LightingConfig, slot: number, batteryPercent: number, durationMs: number, fps: number): Promise<string[]>;
   installDriver(driver: "vigembus" | "hidhide"): Promise<void>;
@@ -56,6 +62,9 @@ const tauriApi: Api = {
   identify: (slot) => invoke("identify_controller", { slot }),
   powerOff: (slot) => invoke("power_off_controller", { slot }),
   powerOffAll: () => invoke("power_off_all"),
+  checkUpdate: () => invoke("check_update"),
+  installUpdate: (update) => invoke("install_update", { update }),
+  onUpdateProgress: (cb) => listen<number>("update-progress", (e) => cb(e.payload)),
   resetLatency: (slot) => invoke("reset_latency", { slot }),
   previewLighting: (lighting, slot, batteryPercent, durationMs, fps) =>
     invoke("preview_lighting", { lighting, slot, batteryPercent, durationMs, fps }),
@@ -125,6 +134,7 @@ function demoRender(l: LightingConfig, t: number, slot: number, battery: number)
 function createDemoApi(): Api {
   const settings: Settings = defaultSettings();
   const start = performance.now();
+  let progressCb: ((p: number) => void) | null = null;
   const identities = ["DEMO-DUALSENSE", "DEMO-DS4", "DEMO-SWITCH"];
   const kinds = [
     { model: "dual_sense", name: "DualSense", transport: "usb", battery: 76, charging: "charging" },
@@ -194,7 +204,7 @@ function createDemoApi(): Api {
         hidhide_installed: false,
         hidhide_error: null,
         platform: "windows",
-        version: "0.1.0",
+        version: "0.2.0",
         demo: true,
         active_game_profile: null,
         conflicts: [],
@@ -252,6 +262,26 @@ function createDemoApi(): Api {
     },
     async identify() {
       return true;
+    },
+    // Add "?update" to the URL to see the update banner in the demo.
+    async checkUpdate() {
+      if (!location.search.includes("update")) return null;
+      return {
+        version: "0.3.0",
+        page: "https://github.com/venatus57/DualBridge/releases",
+        asset: { name: "DualBridge_0.3.0_x64-setup.exe", url: "", size: 1, sha256: null },
+      };
+    },
+    async installUpdate() {
+      for (let p = 0; p <= 100; p += 5) {
+        progressCb?.(p);
+        await new Promise((r) => setTimeout(r, 60));
+      }
+      throw new Error("demo mode");
+    },
+    async onUpdateProgress(cb) {
+      progressCb = cb;
+      return () => (progressCb = null);
     },
     async powerOff(slot) {
       const i = order[slot - 1];
