@@ -147,8 +147,8 @@ pub fn download(asset: &Asset, mut progress: impl FnMut(u8)) -> Result<PathBuf, 
         file.write_all(&buf[..n]).map_err(|e| e.to_string())?;
         hasher.update(&buf[..n]);
         done += n as u64;
-        if asset.size > 0 {
-            let pct = (done * 100 / asset.size).min(100) as u8;
+        if let Some(pct) = (done * 100).checked_div(asset.size) {
+            let pct = pct.min(100) as u8;
             if pct != last_pct {
                 last_pct = pct;
                 progress(pct);
