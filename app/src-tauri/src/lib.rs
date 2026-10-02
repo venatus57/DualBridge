@@ -27,14 +27,26 @@ fn show_main_window(app: &AppHandle) {
 
 fn setup_tray(app: &tauri::App) -> tauri::Result<()> {
     let show = MenuItem::with_id(app, "show", "Show DualBridge", true, None::<&str>)?;
+    let off = MenuItem::with_id(
+        app,
+        "power_off",
+        "Switch off controllers",
+        true,
+        None::<&str>,
+    )?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&show, &quit])?;
+    let menu = Menu::with_items(app, &[&show, &off, &quit])?;
     let mut tray = TrayIconBuilder::with_id("main")
         .tooltip("DualBridge")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "show" => show_main_window(app),
+            "power_off" => {
+                if let Some(engine) = app.try_state::<Arc<Engine>>() {
+                    engine.power_off_all();
+                }
+            }
             "quit" => {
                 if let Some(engine) = app.try_state::<Arc<Engine>>() {
                     engine.shutdown();
@@ -137,6 +149,8 @@ pub fn run() {
             commands::hide_controllers_now,
             commands::swap_slots,
             commands::identify_controller,
+            commands::power_off_controller,
+            commands::power_off_all,
             commands::reset_latency,
             commands::preview_lighting,
             commands::driver_status,

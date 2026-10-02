@@ -11,6 +11,7 @@
 use dualbridge_core::{Model, Transport};
 use serde::Serialize;
 
+pub mod bluetooth;
 #[cfg(feature = "hidapi")]
 pub mod hidapi_backend;
 pub mod latency;

@@ -174,6 +174,21 @@ pub fn identify_controller(engine: EngineState, slot: u8) -> bool {
     engine.identify(slot)
 }
 
+/// Switches a wireless controller off.
+#[tauri::command]
+pub fn power_off_controller(
+    engine: EngineState,
+    slot: u8,
+) -> Result<(), crate::engine::PowerOffError> {
+    engine.power_off(slot)
+}
+
+/// Switches every wireless controller off; returns how many.
+#[tauri::command]
+pub fn power_off_all(engine: EngineState) -> usize {
+    engine.power_off_all()
+}
+
 #[tauri::command]
 pub fn reset_latency(engine: EngineState, slot: u8) {
     engine.reset_latency(slot)

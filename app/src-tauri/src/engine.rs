@@ -19,6 +19,7 @@ use dualbridge_core::output::{OutputState, PlayerLeds, TriggerEffect};
 use dualbridge_core::profile::{Profile, VirtualKind};
 use dualbridge_core::state::{Battery, Buttons, Touch};
 use dualbridge_core::{ControllerState, Model, Rgb, Transport};
+use dualbridge_hid::bluetooth;
 use dualbridge_hid::latency::LatencyStats;
 use dualbridge_hid::manager::{ControllerManager, ManagerEvent};
 use dualbridge_hid::runtime::{ControllerShared, InputSink};
@@ -182,6 +183,18 @@ struct HidingState {
     /// Check again for connected controllers that still need hiding (some
     /// may have connected while the helper was running).
     recheck: bool,
+}
+
+/// Why a controller could not be switched off (shown in the UI).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(tag = "kind", content = "message", rename_all = "snake_case")]
+pub enum PowerOffError {
+    NotFound,
+    /// Connected with a cable, which powers it.
+    Usb,
+    /// Not supported on this platform yet.
+    Unsupported,
+    Failed(String),
 }
 
 pub struct Engine {
@@ -653,6 +666,47 @@ impl Engine {
         true
     }
 
+    /// Switches a controller off. PlayStation controllers turn off when their
+    /// Bluetooth link is dropped; the Switch Pro Controller gets its own
+    /// "power off" command. A controller on a USB cable is powered by it and
+    /// can't be switched off. It then disappears like any disconnected one.
+    pub fn power_off(&self, slot: u8) -> Result<(), PowerOffError> {
+        let c = self
+            .manager
+            .lock()
+            .unwrap()
+            .get(slot)
+            .cloned()
+            .ok_or(PowerOffError::NotFound)?;
+        if c.info.transport == Transport::Usb {
+            return Err(PowerOffError::Usb);
+        }
+        if c.info.model.is_switch() {
+            c.update_output(|o| o.power_off = true);
+            return Ok(());
+        }
+        let mac = c.info.serial.as_deref().unwrap_or_default();
+        bluetooth::disconnect(mac).map_err(|e| match e {
+            bluetooth::PowerOffError::Unsupported => PowerOffError::Unsupported,
+            e => PowerOffError::Failed(e.to_string()),
+        })
+    }
+
+    /// Switches every wireless controller off; returns how many.
+    pub fn power_off_all(&self) -> usize {
+        let slots: Vec<u8> = self
+            .manager
+            .lock()
+            .unwrap()
+            .controllers()
+            .map(|(slot, _)| slot)
+            .collect();
+        slots
+            .into_iter()
+            .filter(|&s| self.power_off(s).is_ok())
+            .count()
+    }
+
     pub fn reset_latency(&self, slot: u8) {
         if let Some(c) = self.manager.lock().unwrap().get(slot) {
             c.latency.reset_max();
@@ -753,6 +807,25 @@ mod tests {
             assert!(start.elapsed() < Duration::from_secs(5), "timed out");
             std::thread::sleep(Duration::from_millis(2));
         }
+    }
+
+    #[test]
+    fn power_off() {
+        let (e, hid, _virt, dir) = engine();
+        hid.add(Model::DualSense, Transport::Usb, "usb");
+        let pro = hid.add(Model::SwitchPro, Transport::Bluetooth, "pro");
+        e.manager.lock().unwrap().poll().unwrap();
+        // A cable powers the controller: it can't be switched off.
+        assert_eq!(e.power_off(1), Err(PowerOffError::Usb));
+        assert_eq!(e.power_off(9), Err(PowerOffError::NotFound));
+        // The Pro Controller gets its "power off" subcommand.
+        assert_eq!(e.power_off(2), Ok(()));
+        wait_until(|| {
+            pro.written()
+                .iter()
+                .any(|w| w[0] == 0x01 && w[10] == 0x06 && w[11] == 0x00)
+        });
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

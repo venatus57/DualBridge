@@ -118,6 +118,11 @@ export interface Settings {
   controller_lighting: Record<string, LightingConfig>;
 }
 
+/** Why a controller could not be switched off (from `power_off_controller`). */
+export type PowerOffError =
+  | { kind: "not_found" | "usb" | "unsupported" }
+  | { kind: "failed"; message: string };
+
 export type Model = "dual_shock4" | "dual_sense" | "dual_sense_edge" | "switch_pro";
 export type Transport = "usb" | "bluetooth";
 

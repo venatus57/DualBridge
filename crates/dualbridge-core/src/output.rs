@@ -182,6 +182,11 @@ pub struct OutputState {
     /// DualSense: fade out the blue startup light so our lightbar color
     /// shows. Send it once, in the first report after connecting.
     pub release_startup_light: bool,
+    /// Switch Pro Controller: switch off (sent once). PlayStation controllers
+    /// have no such command; they are switched off by dropping their
+    /// Bluetooth link instead.
+    #[serde(default)]
+    pub power_off: bool,
 }
 
 /// Builds output reports for one controller, tracking the Bluetooth

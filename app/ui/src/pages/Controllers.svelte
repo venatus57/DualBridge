@@ -1,13 +1,29 @@
 <script lang="ts">
   import ControllerCard from "../lib/components/ControllerCard.svelte";
   import PadGraphic from "../lib/components/PadGraphic.svelte";
+  import Icon from "../lib/components/Icon.svelte";
   import PageHeader from "../lib/components/PageHeader.svelte";
+  import { api } from "../lib/api";
   import { t } from "../lib/i18n.svelte";
-  import { app } from "../lib/store.svelte";
+  import { app, toast } from "../lib/store.svelte";
+
+  const wireless = $derived(app.controllers.some((c) => c.transport !== "usb"));
+
+  async function powerOffAll() {
+    const n = await api.powerOffAll();
+    toast(t("controllers.powerOffAll.done", { n }));
+  }
 </script>
 
 <section class="page">
-  <PageHeader index={1} glyph="cross" color="var(--crs)" title={t("controllers.title")} subtitle={t("controllers.subtitle")} />
+  <PageHeader index={1} glyph="cross" color="var(--crs)" title={t("controllers.title")} subtitle={t("controllers.subtitle")}>
+    {#if wireless}
+      <button class="off-all" onclick={powerOffAll} title={t("controllers.powerOffAll.hint")}>
+        <Icon name="power" size={15} />
+        {t("controllers.powerOffAll")}
+      </button>
+    {/if}
+  </PageHeader>
 
   {#if app.controllers.length === 0}
     <div class="card empty">
@@ -38,6 +54,15 @@
 </section>
 
 <style>
+  .off-all {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+  }
+  .off-all:hover {
+    color: var(--bad);
+    border-color: color-mix(in srgb, var(--bad) 50%, transparent);
+  }
   .empty {
     display: flex;
     gap: 44px;

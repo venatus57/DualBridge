@@ -24,6 +24,8 @@ For each of DualShock 4 (v1 / v2) and DualSense (and Edge if available):
 - [ ] Two or more controllers at once get slots 1, 2, 3... and different colors.
 - [ ] Swapping slots with the arrows works.
 
+- [ ] "Switch off" on a Bluetooth DS4 / DualSense turns it off and it leaves the app; "Switch all off" (page and tray menu) does every wireless one; the button is disabled on USB
+
 ## Input
 
 - [ ] The live view matches sticks, triggers, buttons, D-pad, touchpad fingers.
@@ -61,6 +63,7 @@ For each of DualShock 4 (v1 / v2) and DualSense (and Edge if available):
 - [ ] Battery level shown; charging shown on the cable
 - [ ] Player LEDs show the controller number; "Identify" blinks them
 - [ ] Rumble in a game is felt, keeps going during long effects, and stops when it should
+- [ ] "Switch off" turns the Pro Controller off over Bluetooth
 
 ## macOS
 

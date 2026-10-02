@@ -27,6 +27,9 @@ export interface Api {
   swapSlots(a: number, b: number): Promise<boolean>;
   hideControllersNow(): Promise<void>;
   identify(slot: number): Promise<boolean>;
+  /** Rejects with a `PowerOffError` when the controller can't be switched off. */
+  powerOff(slot: number): Promise<void>;
+  powerOffAll(): Promise<number>;
   resetLatency(slot: number): Promise<void>;
   previewLighting(lighting: LightingConfig, slot: number, batteryPercent: number, durationMs: number, fps: number): Promise<string[]>;
   installDriver(driver: "vigembus" | "hidhide"): Promise<void>;
@@ -49,6 +52,8 @@ const tauriApi: Api = {
   swapSlots: (a, b) => invoke("swap_slots", { a, b }),
   hideControllersNow: () => invoke("hide_controllers_now"),
   identify: (slot) => invoke("identify_controller", { slot }),
+  powerOff: (slot) => invoke("power_off_controller", { slot }),
+  powerOffAll: () => invoke("power_off_all"),
   resetLatency: (slot) => invoke("reset_latency", { slot }),
   previewLighting: (lighting, slot, batteryPercent, durationMs, fps) =>
     invoke("preview_lighting", { lighting, slot, batteryPercent, durationMs, fps }),
@@ -239,6 +244,17 @@ function createDemoApi(): Api {
     },
     async identify() {
       return true;
+    },
+    async powerOff(slot) {
+      const i = order[slot - 1];
+      if (i === undefined) throw { kind: "not_found" };
+      if (kinds[i].transport === "usb") throw { kind: "usb" };
+      order.splice(slot - 1, 1);
+    },
+    async powerOffAll() {
+      const before = order.length;
+      for (let k = order.length - 1; k >= 0; k--) if (kinds[order[k]].transport !== "usb") order.splice(k, 1);
+      return before - order.length;
     },
     async hideControllersNow() {},
     async resetLatency() {},

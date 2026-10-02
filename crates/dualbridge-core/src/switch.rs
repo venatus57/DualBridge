@@ -60,6 +60,8 @@ const FULL_LEN: usize = 49;
 const STANDARD_LEN: usize = 13;
 
 const SUB_SET_INPUT_MODE: u8 = 0x03;
+/// Set HCI state; argument 0 disconnects and switches the controller off.
+const SUB_HCI_STATE: u8 = 0x06;
 const SUB_SPI_READ: u8 = 0x10;
 const SUB_PLAYER_LIGHTS: u8 = 0x30;
 const SUB_ENABLE_IMU: u8 = 0x40;
@@ -338,6 +340,9 @@ pub struct SwitchOutput {
 impl SwitchOutput {
     /// Writes the report for `state` into `buf` and returns its length.
     pub fn build(&mut self, state: &OutputState, buf: &mut [u8]) -> usize {
+        if state.power_off {
+            return subcommand(self.next_counter(), SUB_HCI_STATE, &[0x00], buf);
+        }
         buf[..OUTPUT_LEN].fill(0);
         let rumble = encode_rumble(state.rumble_strong, state.rumble_weak);
         buf[1] = self.next_counter();
@@ -759,6 +764,20 @@ mod tests {
         assert_eq!(&buf[2..6], &encode_rumble(255, 0));
         assert_eq!(&buf[6..10], &encode_rumble(255, 0));
         assert_eq!(buf[10], 0);
+    }
+
+    #[test]
+    fn power_off_command() {
+        let mut out = SwitchOutput::default();
+        let mut buf = [0u8; 64];
+        let state = OutputState {
+            power_off: true,
+            ..OutputState::default()
+        };
+        out.build(&state, &mut buf);
+        assert_eq!(buf[0], OUT_SUBCOMMAND);
+        assert_eq!(&buf[2..6], &RUMBLE_NEUTRAL);
+        assert_eq!(&buf[10..12], &[SUB_HCI_STATE, 0x00]);
     }
 
     #[test]

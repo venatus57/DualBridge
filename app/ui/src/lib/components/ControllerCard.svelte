@@ -2,8 +2,8 @@
   import { api } from "../api";
   import { contrastText } from "../color";
   import { t } from "../i18n.svelte";
-  import { app, change } from "../store.svelte";
-  import type { ControllerView } from "../types";
+  import { app, change, toast } from "../store.svelte";
+  import type { ControllerView, PowerOffError } from "../types";
   import Icon from "./Icon.svelte";
   import LiveInput from "./LiveInput.svelte";
 
@@ -22,6 +22,19 @@
   const cells = $derived(Math.max(battery.percent > 0 ? 1 : 0, Math.ceil(battery.percent / 20)));
   const ms = (ns: number) => (ns / 1e6).toFixed(ns < 1e6 ? 3 : 2);
   const gameProfile = $derived(app.overview?.active_game_profile ?? null);
+
+  const wired = $derived(c.transport === "usb");
+
+  async function powerOff() {
+    try {
+      await api.powerOff(c.slot);
+    } catch (e) {
+      const err = e as PowerOffError;
+      if (err.kind === "usb") toast(t("controller.powerOff.usb"), true);
+      else if (err.kind === "unsupported") toast(t("controller.powerOff.unsupported"), true);
+      else if (err.kind === "failed") toast(t("controller.powerOff.failed", { msg: err.message }), true);
+    }
+  }
 
   function startRename() {
     newName = c.name;
@@ -124,6 +137,15 @@
     <button onclick={() => api.identify(c.slot)} title={t("controller.identify.hint")}>
       <Icon name="pulse" size={15} />
       {t("controller.identify")}
+    </button>
+    <button
+      class="power"
+      disabled={wired}
+      onclick={powerOff}
+      title={wired ? t("controller.powerOff.usb") : t("controller.powerOff.hint")}
+    >
+      <Icon name="power" size={15} />
+      {t("controller.powerOff")}
     </button>
   </div>
 
@@ -280,6 +302,10 @@
     display: inline-flex;
     align-items: center;
     gap: 6px;
+  }
+  .controls .power:not(:disabled):hover {
+    color: var(--bad);
+    border-color: color-mix(in srgb, var(--bad) 50%, transparent);
   }
   footer {
     display: flex;

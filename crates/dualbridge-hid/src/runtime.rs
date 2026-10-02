@@ -115,6 +115,7 @@ impl ControllerShared {
         slot.dirty = false;
         let out = slot.state;
         slot.state.release_startup_light = false;
+        slot.state.power_off = false;
         Some(out)
     }
 }
