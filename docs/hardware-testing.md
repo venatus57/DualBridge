@@ -47,6 +47,7 @@ For each of DualShock 4 (v1 / v2) and DualSense (and Edge if available):
       connects, and not again on the next launch.
 - [ ] Turning exclusive mode off makes the PlayStation controller visible again.
 - [ ] The latency shown on the card stays well under 1 ms on average.
+- [ ] "Sharp directions" on the left stick: in Brawlhalla, side attacks while running never come out as down attacks; diagonals only at real diagonals; nothing below the push threshold
 
 ## Lighting
 

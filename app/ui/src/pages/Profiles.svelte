@@ -127,10 +127,16 @@
     <div class="stick-grid">
       <StickTest config={s} x={which === "left" ? firstController?.input.lx : firstController?.input.rx} y={which === "left" ? firstController?.input.ly : firstController?.input.ry} />
       <div class="stack">
+        <Toggle label={t("profiles.digital")} hint={t("profiles.digital.hint")} bind:checked={s.digital} onchange={save} />
+        {#if s.digital}
+          <Slider label={t("profiles.digitalThreshold")} hint={t("profiles.digitalThreshold.hint")} bind:value={s.digital_threshold} min={0.2} max={0.9} step={0.05} format={pct} onchange={save} />
+          <Slider label={t("profiles.diagonalWidth")} hint={t("profiles.diagonalWidth.hint")} bind:value={s.diagonal_width} min={0} max={60} step={5} format={(v) => `${v}°`} onchange={save} />
+        {:else}
         <Slider label={t("profiles.deadzone")} hint={t("profiles.deadzone.hint")} bind:value={s.deadzone} min={0} max={0.5} step={0.01} format={pct} onchange={save} />
         <Slider label={t("profiles.antiDeadzone")} hint={t("profiles.antiDeadzone.hint")} bind:value={s.anti_deadzone} min={0} max={0.5} step={0.01} format={pct} onchange={save} />
         <Slider label={t("profiles.outer")} bind:value={s.outer} min={0.5} max={1} step={0.01} format={pct} onchange={save} />
         <Slider label={t("profiles.curve")} hint={t("profiles.curve.hint")} bind:value={s.curve} min={0.3} max={3} step={0.05} format={(v) => v.toFixed(2)} onchange={save} />
+        {/if}
         <div class="row">
           <Toggle label={t("profiles.invertX")} bind:checked={s.invert_x} onchange={save} />
           <Toggle label={t("profiles.invertY")} bind:checked={s.invert_y} onchange={save} />

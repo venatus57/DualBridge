@@ -15,6 +15,17 @@
     let vx = config.invert_x ? -raw.x : raw.x;
     let vy = config.invert_y ? -raw.y : raw.y;
     const mag = Math.hypot(vx, vy);
+    if (config.digital) {
+      const th = Math.min(0.95, Math.max(0.05, config.digital_threshold));
+      if (mag < th) return { x: 0, y: 0 };
+      const half = Math.min(60, Math.max(0, config.diagonal_width)) / 2;
+      const limit = Math.tan(((45 - half) * Math.PI) / 180);
+      const ax = Math.abs(vx);
+      const ay = Math.abs(vy);
+      const diag = half > 0 && Math.min(ax, ay) >= Math.max(ax, ay) * limit;
+      if (diag) return { x: Math.sign(vx), y: Math.sign(vy) };
+      return ax >= ay ? { x: Math.sign(vx), y: 0 } : { x: 0, y: Math.sign(vy) };
+    }
     const dz = Math.min(0.99, Math.max(0, config.deadzone));
     if (mag <= dz || mag === 0) return { x: 0, y: 0 };
     const outer = Math.min(1, Math.max(dz + 0.01, config.outer));
@@ -29,8 +40,25 @@
 
 <svg viewBox="-80 -80 160 160" width="170" height="170" aria-hidden="true">
   <circle r={R} class="base" />
-  <circle r={R * config.outer} class="outer" />
-  <circle r={R * config.deadzone} class="dead" />
+  {#if config.digital}
+    <circle r={R * config.digital_threshold} class="dead" />
+    {#each [0, 1, 2, 3] as q (q)}
+      {@const half = Math.min(60, Math.max(0, config.diagonal_width)) / 2}
+      {#each [45 - half, 45 + half] as deg, i (i)}
+        {#if half > 0}
+          {@const a = ((q * 90 + deg) * Math.PI) / 180}
+          <line x1={Math.cos(a) * R * config.digital_threshold} y1={Math.sin(a) * R * config.digital_threshold} x2={Math.cos(a) * R} y2={Math.sin(a) * R} class="sector" />
+        {/if}
+      {/each}
+      {#if half === 0}
+        {@const a = ((q * 90 + 45) * Math.PI) / 180}
+        <line x1={Math.cos(a) * R * config.digital_threshold} y1={Math.sin(a) * R * config.digital_threshold} x2={Math.cos(a) * R} y2={Math.sin(a) * R} class="sector" />
+      {/if}
+    {/each}
+  {:else}
+    <circle r={R * config.outer} class="outer" />
+    <circle r={R * config.deadzone} class="dead" />
+  {/if}
   <line x1={-R} y1="0" x2={R} y2="0" class="axis" />
   <line x1="0" y1={-R} x2="0" y2={R} class="axis" />
   {#if raw}
@@ -58,6 +86,11 @@
   .dead {
     fill: rgba(255, 79, 98, 0.16);
     stroke: var(--bad);
+  }
+  .sector {
+    stroke: var(--accent);
+    stroke-dasharray: 3 3;
+    opacity: 0.6;
   }
   .axis {
     stroke: var(--line);

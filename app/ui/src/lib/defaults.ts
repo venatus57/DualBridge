@@ -27,7 +27,17 @@ export function defaultLighting(): LightingConfig {
 }
 
 export function defaultMapping(): MappingConfig {
-  const stick = { deadzone: 0, outer: 1, anti_deadzone: 0, curve: 1, invert_x: false, invert_y: false };
+  const stick = {
+    deadzone: 0,
+    outer: 1,
+    anti_deadzone: 0,
+    curve: 1,
+    invert_x: false,
+    invert_y: false,
+    digital: false,
+    digital_threshold: 0.5,
+    diagonal_width: 30,
+  };
   const trigger = { deadzone: 0, max: 255, curve: 1 };
   return {
     left_stick: { ...stick },

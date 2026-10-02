@@ -135,6 +135,17 @@ pub struct StickConfig {
     pub curve: f32,
     pub invert_x: bool,
     pub invert_y: bool,
+    /// "Keyboard precision": the stick only sends full presses in 8 (or 4)
+    /// directions, like arrow keys. No half-pushed or slightly-off
+    /// directions, so a sideways push never turns into a down input.
+    pub digital: bool,
+    /// Digital mode: how far the stick must be pushed (0 to 1) before a
+    /// direction counts.
+    pub digital_threshold: f32,
+    /// Digital mode: angular width of each diagonal zone, in degrees (0 to
+    /// 60). 0 gives 4 directions only; the straight directions get the rest
+    /// of each 90° quarter.
+    pub diagonal_width: f32,
 }
 
 impl Default for StickConfig {
@@ -146,6 +157,9 @@ impl Default for StickConfig {
             curve: 1.0,
             invert_x: false,
             invert_y: false,
+            digital: false,
+            digital_threshold: 0.5,
+            diagonal_width: 30.0,
         }
     }
 }
@@ -308,6 +322,9 @@ pub fn map_stick(stick: Stick, c: &StickConfig) -> (i16, i16) {
     if c.invert_y {
         y = -y;
     }
+    if c.digital {
+        return digital_stick(x, y, c);
+    }
     let is_default = c.deadzone <= 0.0
         && c.outer >= 1.0
         && c.anti_deadzone <= 0.0
@@ -329,6 +346,28 @@ pub fn map_stick(stick: Stick, c: &StickConfig) -> (i16, i16) {
     // range after scaling, which to_i16 clamps.
     let k = out / mag;
     (to_i16(x * k), to_i16(y * k))
+}
+
+/// Digital mode: full deflection in one of 8 (or 4) directions, or nothing.
+fn digital_stick(x: f32, y: f32, c: &StickConfig) -> (i16, i16) {
+    let threshold = c.digital_threshold.clamp(0.05, 0.95);
+    if x * x + y * y < threshold * threshold {
+        return (0, 0);
+    }
+    let (ax, ay) = (x.abs(), y.abs());
+    let full = |v: f32| if v < 0.0 { -32768 } else { 32767 };
+    // Diagonal when the angle to the nearest axis is past the straight
+    // zone: tan(angle) = minor / major component.
+    let half_diag = c.diagonal_width.clamp(0.0, 60.0) / 2.0;
+    let limit = (45.0 - half_diag).to_radians().tan();
+    let (minor, major) = if ax < ay { (ax, ay) } else { (ay, ax) };
+    if half_diag > 0.0 && minor >= major * limit {
+        (full(x), full(y))
+    } else if ax >= ay {
+        (full(x), 0)
+    } else {
+        (0, full(y))
+    }
 }
 
 /// Applies dead zone, max and curve to a trigger.
@@ -449,6 +488,38 @@ mod tests {
         assert_eq!(map_trigger(105, &c), 128);
         assert_eq!(map_trigger(200, &c), 255);
         assert_eq!(map_trigger(77, &TriggerConfig::default()), 77);
+    }
+
+    #[test]
+    fn digital_stick_snaps_to_directions() {
+        let c = StickConfig {
+            digital: true,
+            ..StickConfig::default()
+        };
+        let at = |x: u8, y: u8| map_stick(Stick { x, y }, &c);
+        // Below the threshold: nothing, even close to it.
+        assert_eq!(at(128, 128), (0, 0));
+        assert_eq!(at(180, 128), (0, 0));
+        // A side push slightly down stays a pure side input.
+        assert_eq!(at(255, 160), (32767, 0));
+        assert_eq!(at(0, 100), (-32768, 0));
+        // Down (y grows downward on the controller, XInput up is positive).
+        assert_eq!(at(140, 255), (0, -32768));
+        // A real diagonal is both axes at full.
+        assert_eq!(at(240, 240), (32767, -32768));
+        // 4 directions only: diagonals pick the dominant axis.
+        let four = StickConfig {
+            diagonal_width: 0.0,
+            ..c
+        };
+        assert_eq!(map_stick(Stick { x: 250, y: 240 }, &four), (32767, 0));
+        assert_eq!(map_stick(Stick { x: 240, y: 250 }, &four), (0, -32768));
+        // Inversion still applies.
+        let inv = StickConfig {
+            invert_x: true,
+            ..c
+        };
+        assert_eq!(map_stick(Stick { x: 255, y: 128 }, &inv), (-32768, 0));
     }
 
     #[test]

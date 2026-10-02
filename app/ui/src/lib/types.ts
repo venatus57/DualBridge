@@ -45,6 +45,11 @@ export interface StickConfig {
   curve: number;
   invert_x: boolean;
   invert_y: boolean;
+  /** Keyboard precision: full presses in 8 (or 4) directions only. */
+  digital: boolean;
+  digital_threshold: number;
+  /** Degrees, 0 = 4 directions. */
+  diagonal_width: number;
 }
 
 export interface TriggerConfig {
