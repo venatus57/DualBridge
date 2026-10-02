@@ -146,6 +146,14 @@ pub struct StickConfig {
     /// 60). 0 gives 4 directions only; the straight directions get the rest
     /// of each 90° quarter.
     pub diagonal_width: f32,
+    /// Digital mode, "rapid trigger" (like analog gaming keyboards): a
+    /// direction turns on as soon as the stick moves out by
+    /// `rapid_sensitivity` from where it was, and off as soon as it moves
+    /// back by that much, wherever the stick is. Much faster than a fixed
+    /// threshold for taps, dashes and turnarounds.
+    pub rapid: bool,
+    /// Rapid trigger movement needed to press or release, 0 to 1.
+    pub rapid_sensitivity: f32,
 }
 
 impl Default for StickConfig {
@@ -158,8 +166,10 @@ impl Default for StickConfig {
             invert_x: false,
             invert_y: false,
             digital: false,
-            digital_threshold: 0.5,
+            digital_threshold: 0.3,
             diagonal_width: 30.0,
+            rapid: true,
+            rapid_sensitivity: 0.1,
         }
     }
 }
@@ -212,7 +222,23 @@ pub struct Mapper {
     l2: TriggerConfig,
     r2: TriggerConfig,
     swap_sticks: bool,
+    /// Rapid trigger state of the left and right sticks.
+    rapid: [RapidState; 2],
 }
+
+/// Rapid trigger state of one stick (see [`StickConfig::rapid`]).
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct RapidState {
+    active: bool,
+    dir: (i16, i16),
+    /// Farthest point reached while a direction is on.
+    peak: f32,
+    /// Closest point to the center reached while off.
+    trough: f32,
+}
+
+/// Below this, rapid trigger never presses (stick noise and drift).
+const RAPID_FLOOR: f32 = 0.12;
 
 const FORCE_LT: u8 = 1;
 const FORCE_RT: u8 = 2;
@@ -241,6 +267,7 @@ impl MappingConfig {
             l2: self.l2,
             r2: self.r2,
             swap_sticks: self.swap_sticks,
+            rapid: [RapidState::default(); 2],
         }
     }
 }
@@ -254,7 +281,7 @@ impl Default for Mapper {
 impl Mapper {
     /// Converts a controller state to the virtual controller state.
     #[inline]
-    pub fn map(&self, s: &ControllerState) -> XInputState {
+    pub fn map(&mut self, s: &ControllerState) -> XInputState {
         let mut buttons = 0u16;
         let mut force = 0u8;
         for &(bit, target, f) in &self.targets {
@@ -268,8 +295,9 @@ impl Mapper {
         } else {
             (s.left_stick, s.right_stick)
         };
-        let (lx, ly) = map_stick(ls, &self.left_stick);
-        let (rx, ry) = map_stick(rs, &self.right_stick);
+        let [left, right] = &mut self.rapid;
+        let (lx, ly) = map_stick_with(ls, &self.left_stick, left);
+        let (rx, ry) = map_stick_with(rs, &self.right_stick, right);
         XInputState {
             buttons,
             left_trigger: if force & FORCE_LT != 0 {
@@ -311,8 +339,9 @@ fn to_i16(v: f32) -> i16 {
     }
 }
 
-/// Applies dead zone, outer radius, anti-dead zone and curve to a stick.
-pub fn map_stick(stick: Stick, c: &StickConfig) -> (i16, i16) {
+/// Stick position in -1..1, up positive, with inversion applied.
+#[inline]
+fn stick_xy(stick: Stick, c: &StickConfig) -> (f32, f32) {
     let mut x = axis(stick.x);
     // Controllers report Y growing downward; XInput wants up positive.
     let mut y = -axis(stick.y);
@@ -322,6 +351,42 @@ pub fn map_stick(stick: Stick, c: &StickConfig) -> (i16, i16) {
     if c.invert_y {
         y = -y;
     }
+    (x, y)
+}
+
+/// [`map_stick`], plus rapid trigger in digital mode (which needs state).
+#[inline]
+pub fn map_stick_with(stick: Stick, c: &StickConfig, rapid: &mut RapidState) -> (i16, i16) {
+    if !(c.digital && c.rapid) {
+        return map_stick(stick, c);
+    }
+    let (x, y) = stick_xy(stick, c);
+    let mag = (x * x + y * y).sqrt();
+    let sens = c.rapid_sensitivity.clamp(0.02, 0.5);
+    let r = rapid;
+    if r.active {
+        if mag < RAPID_FLOOR || mag <= r.peak - sens {
+            r.active = false;
+            r.trough = mag;
+            return (0, 0);
+        }
+        r.peak = r.peak.max(mag);
+        r.dir = digital_direction(x, y, c);
+        return r.dir;
+    }
+    r.trough = r.trough.min(mag);
+    if mag >= RAPID_FLOOR && mag >= r.trough + sens {
+        r.active = true;
+        r.peak = mag;
+        r.dir = digital_direction(x, y, c);
+        return r.dir;
+    }
+    (0, 0)
+}
+
+/// Applies dead zone, outer radius, anti-dead zone and curve to a stick.
+pub fn map_stick(stick: Stick, c: &StickConfig) -> (i16, i16) {
+    let (x, y) = stick_xy(stick, c);
     if c.digital {
         return digital_stick(x, y, c);
     }
@@ -354,6 +419,12 @@ fn digital_stick(x: f32, y: f32, c: &StickConfig) -> (i16, i16) {
     if x * x + y * y < threshold * threshold {
         return (0, 0);
     }
+    digital_direction(x, y, c)
+}
+
+/// The 8 (or 4) way direction of a stick position, at full deflection.
+#[inline]
+fn digital_direction(x: f32, y: f32, c: &StickConfig) -> (i16, i16) {
     let (ax, ay) = (x.abs(), y.abs());
     let full = |v: f32| if v < 0.0 { -32768 } else { 32767 };
     // Diagonal when the angle to the nearest axis is past the straight
@@ -399,7 +470,7 @@ mod tests {
 
     #[test]
     fn default_buttons() {
-        let m = Mapper::default();
+        let mut m = Mapper::default();
         let x = m.map(&state(
             Buttons::CROSS
                 | Buttons::TRIANGLE
@@ -423,7 +494,7 @@ mod tests {
             ],
             ..MappingConfig::default()
         };
-        let m = cfg.compile();
+        let mut m = cfg.compile();
         let x = m.map(&state(Buttons::CROSS | Buttons::L1 | Buttons::LEFT_PADDLE));
         assert_eq!(x.buttons, xbutton::B);
         assert_eq!(x.right_trigger, 255);
@@ -494,6 +565,7 @@ mod tests {
     fn digital_stick_snaps_to_directions() {
         let c = StickConfig {
             digital: true,
+            digital_threshold: 0.5,
             ..StickConfig::default()
         };
         let at = |x: u8, y: u8| map_stick(Stick { x, y }, &c);
@@ -520,6 +592,42 @@ mod tests {
             ..c
         };
         assert_eq!(map_stick(Stick { x: 255, y: 128 }, &inv), (-32768, 0));
+    }
+
+    #[test]
+    fn rapid_trigger() {
+        let c = StickConfig {
+            digital: true,
+            rapid: true,
+            rapid_sensitivity: 0.1,
+            ..StickConfig::default()
+        };
+        let mut r = RapidState::default();
+        // x position as a fraction of full right.
+        let mut at = |f: f32| {
+            let x = (128.0 + f * 127.0).round() as u8;
+            map_stick_with(Stick { x, y: 128 }, &c, &mut r).0
+        };
+        assert_eq!(at(0.0), 0);
+        // Noise near the center never presses.
+        assert_eq!(at(0.08), 0);
+        // Pressed as soon as it moves out by 10 %, well before 30 %.
+        assert_eq!(at(0.15), 32767);
+        assert_eq!(at(0.6), 32767);
+        // Released as soon as it moves back by 10 %, far from the center.
+        assert_eq!(at(0.55), 32767);
+        assert_eq!(at(0.48), 0);
+        // And pressed again by pushing out again (a quick dash re-tap),
+        // without going back to the center.
+        assert_eq!(at(0.52), 0);
+        assert_eq!(at(0.6), 32767);
+        // Back to the center: off.
+        assert_eq!(at(0.05), 0);
+        // Without rapid trigger the fixed threshold applies.
+        let fixed = StickConfig { rapid: false, ..c };
+        let mut r = RapidState::default();
+        let x = (128.0f32 + 0.2 * 127.0).round() as u8;
+        assert_eq!(map_stick_with(Stick { x, y: 128 }, &fixed, &mut r), (0, 0));
     }
 
     #[test]

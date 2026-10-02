@@ -50,6 +50,9 @@ export interface StickConfig {
   digital_threshold: number;
   /** Degrees, 0 = 4 directions. */
   diagonal_width: number;
+  /** Digital mode: press/release on movement, like rapid-trigger keyboards. */
+  rapid: boolean;
+  rapid_sensitivity: number;
 }
 
 export interface TriggerConfig {

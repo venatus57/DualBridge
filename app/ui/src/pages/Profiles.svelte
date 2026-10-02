@@ -129,7 +129,12 @@
       <div class="stack">
         <Toggle label={t("profiles.digital")} hint={t("profiles.digital.hint")} bind:checked={s.digital} onchange={save} />
         {#if s.digital}
-          <Slider label={t("profiles.digitalThreshold")} hint={t("profiles.digitalThreshold.hint")} bind:value={s.digital_threshold} min={0.2} max={0.9} step={0.05} format={pct} onchange={save} />
+          <Toggle label={t("profiles.rapid")} hint={t("profiles.rapid.hint")} bind:checked={s.rapid} onchange={save} />
+          {#if s.rapid}
+            <Slider label={t("profiles.rapidSensitivity")} hint={t("profiles.rapidSensitivity.hint")} bind:value={s.rapid_sensitivity} min={0.03} max={0.3} step={0.01} format={pct} onchange={save} />
+          {:else}
+            <Slider label={t("profiles.digitalThreshold")} hint={t("profiles.digitalThreshold.hint")} bind:value={s.digital_threshold} min={0.1} max={0.9} step={0.05} format={pct} onchange={save} />
+          {/if}
           <Slider label={t("profiles.diagonalWidth")} hint={t("profiles.diagonalWidth.hint")} bind:value={s.diagonal_width} min={0} max={60} step={5} format={(v) => `${v}°`} onchange={save} />
         {:else}
         <Slider label={t("profiles.deadzone")} hint={t("profiles.deadzone.hint")} bind:value={s.deadzone} min={0} max={0.5} step={0.01} format={pct} onchange={save} />

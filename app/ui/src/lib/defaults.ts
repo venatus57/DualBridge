@@ -35,8 +35,10 @@ export function defaultMapping(): MappingConfig {
     invert_x: false,
     invert_y: false,
     digital: false,
-    digital_threshold: 0.5,
+    digital_threshold: 0.3,
     diagonal_width: 30,
+    rapid: true,
+    rapid_sensitivity: 0.1,
   };
   const trigger = { deadzone: 0, max: 255, curve: 1 };
   return {

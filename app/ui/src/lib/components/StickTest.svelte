@@ -9,22 +9,48 @@
   const axis = (v: number) => (v >= 128 ? (v - 128) / 127 : (v - 128) / 128);
   const raw = $derived(x === undefined || y === undefined ? null : { x: axis(x), y: axis(y) });
 
+  // Rapid trigger state (same as `mapping::map_stick_with`), not reactive.
+  const rapid = { active: false, dir: { x: 0, y: 0 }, peak: 0, trough: 0 };
+
+  function direction(vx: number, vy: number) {
+    const half = Math.min(60, Math.max(0, config.diagonal_width)) / 2;
+    const limit = Math.tan(((45 - half) * Math.PI) / 180);
+    const ax = Math.abs(vx);
+    const ay = Math.abs(vy);
+    if (half > 0 && Math.min(ax, ay) >= Math.max(ax, ay) * limit) return { x: Math.sign(vx), y: Math.sign(vy) };
+    return ax >= ay ? { x: Math.sign(vx), y: 0 } : { x: 0, y: Math.sign(vy) };
+  }
+
   // Same math as `mapping::map_stick` (screen coordinates: y down).
   const mapped = $derived.by(() => {
     if (!raw) return null;
     let vx = config.invert_x ? -raw.x : raw.x;
     let vy = config.invert_y ? -raw.y : raw.y;
     const mag = Math.hypot(vx, vy);
+    if (config.digital && config.rapid) {
+      const sens = Math.min(0.5, Math.max(0.02, config.rapid_sensitivity));
+      const r = rapid;
+      if (r.active) {
+        if (mag < 0.12 || mag <= r.peak - sens) {
+          r.active = false;
+          r.trough = mag;
+          return { x: 0, y: 0 };
+        }
+        r.peak = Math.max(r.peak, mag);
+        return direction(vx, vy);
+      }
+      r.trough = Math.min(r.trough, mag);
+      if (mag >= 0.12 && mag >= r.trough + sens) {
+        r.active = true;
+        r.peak = mag;
+        return direction(vx, vy);
+      }
+      return { x: 0, y: 0 };
+    }
     if (config.digital) {
       const th = Math.min(0.95, Math.max(0.05, config.digital_threshold));
       if (mag < th) return { x: 0, y: 0 };
-      const half = Math.min(60, Math.max(0, config.diagonal_width)) / 2;
-      const limit = Math.tan(((45 - half) * Math.PI) / 180);
-      const ax = Math.abs(vx);
-      const ay = Math.abs(vy);
-      const diag = half > 0 && Math.min(ax, ay) >= Math.max(ax, ay) * limit;
-      if (diag) return { x: Math.sign(vx), y: Math.sign(vy) };
-      return ax >= ay ? { x: Math.sign(vx), y: 0 } : { x: 0, y: Math.sign(vy) };
+      return direction(vx, vy);
     }
     const dz = Math.min(0.99, Math.max(0, config.deadzone));
     if (mag <= dz || mag === 0) return { x: 0, y: 0 };
@@ -41,18 +67,18 @@
 <svg viewBox="-80 -80 160 160" width="170" height="170" aria-hidden="true">
   <circle r={R} class="base" />
   {#if config.digital}
-    <circle r={R * config.digital_threshold} class="dead" />
+    <circle r={R * (config.rapid ? 0.12 : config.digital_threshold)} class="dead" />
     {#each [0, 1, 2, 3] as q (q)}
       {@const half = Math.min(60, Math.max(0, config.diagonal_width)) / 2}
       {#each [45 - half, 45 + half] as deg, i (i)}
         {#if half > 0}
           {@const a = ((q * 90 + deg) * Math.PI) / 180}
-          <line x1={Math.cos(a) * R * config.digital_threshold} y1={Math.sin(a) * R * config.digital_threshold} x2={Math.cos(a) * R} y2={Math.sin(a) * R} class="sector" />
+          <line x1={Math.cos(a) * R * (config.rapid ? 0.12 : config.digital_threshold)} y1={Math.sin(a) * R * (config.rapid ? 0.12 : config.digital_threshold)} x2={Math.cos(a) * R} y2={Math.sin(a) * R} class="sector" />
         {/if}
       {/each}
       {#if half === 0}
         {@const a = ((q * 90 + 45) * Math.PI) / 180}
-        <line x1={Math.cos(a) * R * config.digital_threshold} y1={Math.sin(a) * R * config.digital_threshold} x2={Math.cos(a) * R} y2={Math.sin(a) * R} class="sector" />
+        <line x1={Math.cos(a) * R * (config.rapid ? 0.12 : config.digital_threshold)} y1={Math.sin(a) * R * (config.rapid ? 0.12 : config.digital_threshold)} x2={Math.cos(a) * R} y2={Math.sin(a) * R} class="sector" />
       {/if}
     {/each}
   {:else}
