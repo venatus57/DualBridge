@@ -911,6 +911,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
  "vigem-client",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
