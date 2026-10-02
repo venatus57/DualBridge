@@ -18,6 +18,7 @@ import type {
 export interface Api {
   getOverview(): Promise<Overview>;
   onControllers(cb: (list: ControllerView[]) => void): Promise<() => void>;
+  onConflicts(cb: (programs: string[]) => void): Promise<() => void>;
   saveProfile(profile: Profile, previousName: string | null): Promise<Settings>;
   deleteProfile(name: string): Promise<Settings>;
   assignProfile(identity: string, profile: string): Promise<Settings>;
@@ -43,6 +44,7 @@ export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in
 const tauriApi: Api = {
   getOverview: () => invoke("get_overview"),
   onControllers: (cb) => listen<ControllerView[]>("controllers", (e) => cb(e.payload)),
+  onConflicts: (cb) => listen<string[]>("conflicts", (e) => cb(e.payload)),
   saveProfile: (profile, previousName) => invoke("save_profile", { profile, previousName }),
   deleteProfile: (name) => invoke("delete_profile", { name }),
   assignProfile: (identity, profile) => invoke("assign_profile", { identity, profile }),
@@ -152,7 +154,9 @@ function createDemoApi(): Api {
         model_name: k.name,
         transport: k.transport,
         battery: { percent: battery, charging: k.charging, cable: k.transport === "usb" },
-        lightbar: demoRender(settings.controller_lighting[identity] ?? profile.lighting, t, slot, battery),
+        lightbar: settings.battery_saver
+          ? "#000000"
+          : demoRender(settings.controller_lighting[identity] ?? profile.lighting, t, slot, battery),
         profile: profile.name,
         input: {
           buttons: pressed,
@@ -193,7 +197,11 @@ function createDemoApi(): Api {
         version: "0.1.0",
         demo: true,
         active_game_profile: null,
+        conflicts: [],
       };
+    },
+    async onConflicts() {
+      return () => {};
     },
     async onControllers(cb) {
       const id = setInterval(() => cb(controllers()), 33);

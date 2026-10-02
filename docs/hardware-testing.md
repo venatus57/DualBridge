@@ -25,6 +25,8 @@ For each of DualShock 4 (v1 / v2) and DualSense (and Edge if available):
 - [ ] Swapping slots with the arrows works.
 
 - [ ] "Switch off" on a Bluetooth DS4 / DualSense turns it off and it leaves the app; "Switch all off" (page and tray menu) does every wireless one; the button is disabled on USB
+- [ ] Battery saver turns every lightbar off (and back on); "switch off after N minutes" switches an untouched Bluetooth controller off, not one in use
+- [ ] With DS4Windows (or DSX) running, the red warning appears within a few seconds and goes away once it is closed
 
 ## Input
 

@@ -33,6 +33,11 @@ pub struct Settings {
     /// Switch profiles automatically when a game listed in a profile is in
     /// the foreground.
     pub auto_profile_switch: bool,
+    /// Battery saver: lightbars off, player LEDs dimmed.
+    pub battery_saver: bool,
+    /// Switch wireless controllers off after this many minutes without being
+    /// touched; 0 = never.
+    pub idle_off_minutes: u32,
     /// Always contains at least one profile; the first one is the default.
     pub profiles: Vec<Profile>,
     /// Profile name chosen for each controller (by identity).
@@ -56,6 +61,8 @@ impl Default for Settings {
             exclusive_mode: true,
             hidden_devices: BTreeSet::new(),
             auto_profile_switch: true,
+            battery_saver: false,
+            idle_off_minutes: 0,
             profiles: vec![Profile::default()],
             assignments: BTreeMap::new(),
             controller_names: BTreeMap::new(),

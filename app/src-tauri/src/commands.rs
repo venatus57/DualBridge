@@ -25,6 +25,9 @@ pub struct Overview {
     pub version: &'static str,
     pub demo: bool,
     pub active_game_profile: Option<String>,
+    /// Other controller programs running (DS4Windows...), which cause
+    /// duplicates in games.
+    pub conflicts: Vec<&'static str>,
 }
 
 fn platform() -> &'static str {
@@ -49,6 +52,7 @@ pub fn get_overview(engine: EngineState) -> Overview {
         version: env!("CARGO_PKG_VERSION"),
         demo: engine.demo,
         active_game_profile: engine.active_game_profile(),
+        conflicts: engine.conflicts(),
     }
 }
 
@@ -129,6 +133,8 @@ pub struct PreferencesPatch {
     pub start_minimized: Option<bool>,
     pub exclusive_mode: Option<bool>,
     pub auto_profile_switch: Option<bool>,
+    pub battery_saver: Option<bool>,
+    pub idle_off_minutes: Option<u32>,
 }
 
 #[tauri::command]
@@ -151,6 +157,12 @@ pub fn set_preferences(engine: EngineState, patch: PreferencesPatch) -> Result<S
         }
         if let Some(v) = patch.auto_profile_switch {
             s.auto_profile_switch = v;
+        }
+        if let Some(v) = patch.battery_saver {
+            s.battery_saver = v;
+        }
+        if let Some(v) = patch.idle_off_minutes {
+            s.idle_off_minutes = v;
         }
         Ok(())
     })?;

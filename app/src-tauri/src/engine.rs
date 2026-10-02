@@ -15,7 +15,7 @@ use std::time::{Duration, Instant};
 use dualbridge_core::calibration::CalibratedMotion;
 use dualbridge_core::lighting::LightingContext;
 use dualbridge_core::mapping::{Mapper, XInputState};
-use dualbridge_core::output::{OutputState, PlayerLeds, TriggerEffect};
+use dualbridge_core::output::{OutputState, PlayerLedBrightness, PlayerLeds, TriggerEffect};
 use dualbridge_core::profile::{Profile, VirtualKind};
 use dualbridge_core::state::{Battery, Buttons, Touch};
 use dualbridge_core::{ControllerState, Model, Rgb, Transport};
@@ -32,6 +32,8 @@ use crate::settings::Settings;
 
 const TICK: Duration = Duration::from_millis(33);
 const POLL_EVERY: Duration = Duration::from_secs(1);
+/// How often to look for conflicting programs (DS4Windows...).
+const CONFLICTS_EVERY: Duration = Duration::from_secs(5);
 
 /// The mapping used by an input thread, swappable without blocking it.
 #[derive(Default)]
@@ -158,6 +160,8 @@ struct PadLinks {
     mic_muted: bool,
     mute_held: bool,
     identify_until: Option<Instant>,
+    /// Last time the controller was touched (for automatic switch-off).
+    last_active: Instant,
 }
 
 struct EngineShared {
@@ -170,6 +174,8 @@ struct EngineShared {
     /// Last HidHide failure, shown in the settings.
     hidhide_error: Mutex<Option<String>>,
     hiding: Mutex<HidingState>,
+    /// Other controller programs running (DS4Windows...).
+    conflicts: Mutex<Vec<&'static str>>,
 }
 
 /// Progress of HidHide changes, which need an elevated helper (UAC prompt).
@@ -261,6 +267,21 @@ impl InputView {
     }
 }
 
+/// Is someone touching the controller? Any button, a stick pushed away from
+/// the center, or a trigger pressed (small resting noise is ignored).
+fn is_touched(s: &ControllerState) -> bool {
+    const STICK: i32 = 40;
+    const TRIGGER: u8 = 30;
+    let off = |v: u8| (v as i32 - 128).abs() > STICK;
+    s.buttons.0 != 0
+        || off(s.left_stick.x)
+        || off(s.left_stick.y)
+        || off(s.right_stick.x)
+        || off(s.right_stick.y)
+        || s.l2 > TRIGGER
+        || s.r2 > TRIGGER
+}
+
 fn output_for(profile: &Profile, model: Model) -> OutputState {
     let (left, right) = if model.is_dualsense() {
         (profile.left_trigger, profile.right_trigger)
@@ -289,6 +310,7 @@ impl Engine {
             virtual_backend: Mutex::new(virtual_backend),
             virtual_status: Mutex::new(BackendStatus::Unsupported),
             game_profile: Mutex::new(None),
+            conflicts: Mutex::new(Vec::new()),
             hidhide_error: Mutex::new(None),
             hiding: Mutex::new(HidingState::default()),
         });
@@ -320,6 +342,7 @@ impl Engine {
 
     fn run(&self, app: AppHandle) {
         let mut last_poll: Option<Instant> = None;
+        let mut last_conflicts: Option<Instant> = None;
         loop {
             let now = Instant::now();
             if last_poll.is_none_or(|t| now - t >= POLL_EVERY) {
@@ -327,7 +350,16 @@ impl Engine {
                 self.poll_devices(&app);
                 self.check_foreground();
             }
-            self.render_lighting(now);
+            if last_conflicts.is_none_or(|t| now - t >= CONFLICTS_EVERY) {
+                last_conflicts = Some(now);
+                if self.check_conflicts() {
+                    let _ = app.emit("conflicts", self.conflicts());
+                }
+            }
+            for slot in self.render_lighting(now) {
+                // Idle for too long: switch it off (best effort).
+                let _ = self.power_off(slot);
+            }
             let _ = app.emit("controllers", self.controllers());
             std::thread::sleep(TICK.saturating_sub(now.elapsed()));
         }
@@ -478,7 +510,27 @@ impl Engine {
         }
     }
 
-    fn render_lighting(&self, now: Instant) {
+    /// Updates the list of conflicting programs; `true` if it changed.
+    fn check_conflicts(&self) -> bool {
+        if self.demo {
+            return false;
+        }
+        let found = dualbridge_virtual::conflicts::running();
+        let mut current = self.shared.conflicts.lock().unwrap();
+        let changed = *current != found;
+        *current = found;
+        changed
+    }
+
+    pub fn conflicts(&self) -> Vec<&'static str> {
+        self.shared.conflicts.lock().unwrap().clone()
+    }
+
+    /// Renders and sends every controller's lighting. Returns the slots of
+    /// wireless controllers idle for longer than the automatic switch-off
+    /// delay.
+    fn render_lighting(&self, now: Instant) -> Vec<u8> {
+        let mut idle = Vec::new();
         let time_ms = (now - self.started).as_millis() as u64;
         let manager = self.manager.lock().unwrap();
         let settings = self.shared.settings.lock().unwrap();
@@ -495,6 +547,19 @@ impl Engine {
                 links.mic_muted = !links.mic_muted;
             }
             links.mute_held = mute;
+
+            if is_touched(&snapshot) {
+                links.last_active = now;
+            }
+            let idle_off = Duration::from_secs(settings.idle_off_minutes as u64 * 60);
+            if settings.idle_off_minutes > 0
+                && c.info.transport == Transport::Bluetooth
+                && now - links.last_active >= idle_off
+            {
+                idle.push(slot);
+                // Don't retry every tick if it can't be switched off.
+                links.last_active = now;
+            }
 
             let profile = settings.profile_for(c.info.identity(), game.as_deref());
             // Until the first full report the battery level is unknown:
@@ -515,6 +580,10 @@ impl Engine {
             };
             let lighting = settings.lighting_for(c.info.identity(), game.as_deref());
             let mut frame = lighting.render(&ctx);
+            if settings.battery_saver {
+                frame.lightbar = Rgb::BLACK;
+                frame.player_led_brightness = PlayerLedBrightness::Low;
+            }
             let identifying = links.identify_until.is_some_and(|t| now < t);
             if identifying {
                 frame.lightbar = if (time_ms / 120).is_multiple_of(2) {
@@ -547,6 +616,7 @@ impl Engine {
                 }
             });
         }
+        idle
     }
 
     /// Pushes the current profiles to every connected controller.
@@ -764,6 +834,7 @@ impl EngineShared {
                 mic_muted: false,
                 mute_held: false,
                 identify_until: None,
+                last_active: Instant::now(),
             },
         );
         let sink = PadSink {
@@ -807,6 +878,54 @@ mod tests {
             assert!(start.elapsed() < Duration::from_secs(5), "timed out");
             std::thread::sleep(Duration::from_millis(2));
         }
+    }
+
+    #[test]
+    fn battery_saver_and_idle_switch_off() {
+        let (e, hid, _virt, dir) = engine();
+        hid.add(Model::DualShock4, Transport::Bluetooth, "bt");
+        hid.add(Model::DualSense, Transport::Usb, "usb");
+        e.manager.lock().unwrap().poll().unwrap();
+        let start = Instant::now();
+
+        // Battery saver turns the lightbars off.
+        e.update_settings(|s| {
+            s.battery_saver = true;
+            Ok(())
+        })
+        .unwrap();
+        assert!(e.render_lighting(start).is_empty());
+        let usb = e.manager.lock().unwrap().get(2).unwrap().clone();
+        assert_eq!(usb.output().lightbar, Rgb::BLACK);
+
+        // Idle switch-off: only wireless controllers, only once the delay
+        // has passed, and not again on the next tick.
+        e.update_settings(|s| {
+            s.idle_off_minutes = 10;
+            Ok(())
+        })
+        .unwrap();
+        assert!(e
+            .render_lighting(start + Duration::from_secs(9 * 60))
+            .is_empty());
+        let later = start + Duration::from_secs(10 * 60 + 1);
+        assert_eq!(e.render_lighting(later), vec![1]);
+        assert!(e.render_lighting(later).is_empty());
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn touched_detection() {
+        let mut s = ControllerState::default();
+        assert!(!is_touched(&s));
+        s.left_stick.x = 140; // resting noise
+        s.r2 = 10;
+        assert!(!is_touched(&s));
+        s.right_stick.y = 30;
+        assert!(is_touched(&s));
+        s = ControllerState::default();
+        s.buttons = Buttons::CROSS;
+        assert!(is_touched(&s));
     }
 
     #[test]

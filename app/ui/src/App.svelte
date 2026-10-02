@@ -91,6 +91,12 @@
 
   <main>
     <div class="ambient" aria-hidden="true"></div>
+    {#if app.overview?.conflicts?.length}
+      <div class="conflict" role="alert">
+        <b>{t("conflict.title", { names: app.overview.conflicts.join(", ") })}</b>
+        <span>{t("conflict.text")}</span>
+      </div>
+    {/if}
     {#if error}
       <div class="page"><div class="card">{t("common.error", { msg: error })}</div></div>
     {:else if app.ready}
@@ -322,6 +328,26 @@
     pointer-events: none;
     z-index: -1;
     transition: background 0.8s;
+  }
+  .conflict {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    margin: 0 0 -8px;
+    padding: 12px 40px;
+    background: color-mix(in srgb, var(--bad) 16%, var(--bg));
+    border-bottom: 1px solid color-mix(in srgb, var(--bad) 50%, transparent);
+    color: var(--text);
+  }
+  .conflict b {
+    color: var(--bad);
+  }
+  .conflict span {
+    color: var(--muted);
+    font-size: 13px;
   }
   .grain {
     position: fixed;

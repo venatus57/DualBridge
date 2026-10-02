@@ -3,7 +3,9 @@
 //! Games on Windows mostly speak XInput, so DualBridge exposes each physical
 //! controller as a virtual Xbox 360 controller through the ViGEmBus driver
 //! ([`vigem`], Windows only). [`hidhide`] hides the physical controller from
-//! games so they don't see it twice. [`mock`] records updates for tests.
+//! games so they don't see it twice. [`conflicts`] spots other controller
+//! programs that would add their own virtual controllers. [`mock`] records
+//! updates for tests.
 //!
 //! On macOS there is no virtual gamepad backend (it would need an Apple
 //! entitlement); [`default_backend`] returns an [`UnsupportedBackend`] there.
@@ -11,6 +13,7 @@
 use dualbridge_core::mapping::XInputState;
 use serde::Serialize;
 
+pub mod conflicts;
 pub mod hidhide;
 pub mod mock;
 #[cfg(windows)]

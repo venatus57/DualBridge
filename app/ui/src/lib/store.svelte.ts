@@ -57,6 +57,9 @@ export async function init() {
   app.editing = app.settings.profiles[0].name;
   app.wizard = !app.settings.first_run_done;
   await api.onControllers((list) => (app.controllers = list));
+  await api.onConflicts((programs) => {
+    if (app.overview) app.overview.conflicts = programs;
+  });
   app.ready = true;
 }
 

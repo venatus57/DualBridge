@@ -5,7 +5,7 @@
   import PageHeader from "../lib/components/PageHeader.svelte";
   import { api } from "../lib/api";
   import { t } from "../lib/i18n.svelte";
-  import { app, toast } from "../lib/store.svelte";
+  import { app, change, toast } from "../lib/store.svelte";
 
   const wireless = $derived(app.controllers.some((c) => c.transport !== "usb"));
 
@@ -17,6 +17,16 @@
 
 <section class="page">
   <PageHeader index={1} glyph="cross" color="var(--crs)" title={t("controllers.title")} subtitle={t("controllers.subtitle")}>
+    <button
+      class="off-all saver"
+      class:on={app.settings.battery_saver}
+      aria-pressed={app.settings.battery_saver}
+      onclick={() => change(api.setPreferences({ battery_saver: !app.settings.battery_saver }))}
+      title={t("controllers.saver.hint")}
+    >
+      <Icon name="leaf" size={15} />
+      {t("controllers.saver")}
+    </button>
     {#if wireless}
       <button class="off-all" onclick={powerOffAll} title={t("controllers.powerOffAll.hint")}>
         <Icon name="power" size={15} />
@@ -59,7 +69,12 @@
     align-items: center;
     gap: 7px;
   }
-  .off-all:hover {
+  .saver.on {
+    color: var(--ok);
+    border-color: color-mix(in srgb, var(--ok) 55%, transparent);
+    background: color-mix(in srgb, var(--ok) 10%, var(--panel-2));
+  }
+  .off-all:not(.saver):hover {
     color: var(--bad);
     border-color: color-mix(in srgb, var(--bad) 50%, transparent);
   }

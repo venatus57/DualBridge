@@ -112,6 +112,9 @@ export interface Settings {
   exclusive_mode: boolean;
   hidden_devices: string[];
   auto_profile_switch: boolean;
+  battery_saver: boolean;
+  /** 0 = never. */
+  idle_off_minutes: number;
   profiles: Profile[];
   assignments: Record<string, string>;
   controller_names: Record<string, string>;
@@ -191,6 +194,8 @@ export interface Overview {
   version: string;
   demo: boolean;
   active_game_profile: string | null;
+  /** Other controller programs running (DS4Windows...). */
+  conflicts: string[];
 }
 
 export interface PreferencesPatch {
@@ -200,4 +205,6 @@ export interface PreferencesPatch {
   start_minimized?: boolean;
   exclusive_mode?: boolean;
   auto_profile_switch?: boolean;
+  battery_saver?: boolean;
+  idle_off_minutes?: number;
 }

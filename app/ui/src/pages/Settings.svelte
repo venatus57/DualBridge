@@ -49,6 +49,27 @@
   </div>
 
   <div class="card stack">
+    <h2>{t("settings.battery")}</h2>
+    <Toggle
+      label={t("settings.batterySaver")}
+      hint={t("settings.batterySaver.hint")}
+      checked={s.battery_saver}
+      onchange={(v) => change(api.setPreferences({ battery_saver: v }))}
+    />
+    <div class="row">
+      <div class="stack-tight">
+        <span>{t("settings.idleOff")}</span>
+        <span class="hint">{t("settings.idleOff.hint")}</span>
+      </div>
+      <select value={String(s.idle_off_minutes)} onchange={(e) => change(api.setPreferences({ idle_off_minutes: Number(e.currentTarget.value) }))}>
+        {#each [0, 5, 10, 15, 30, 60] as m (m)}
+          <option value={String(m)}>{m === 0 ? t("settings.idleOff.never") : t("settings.idleOff.minutes", { n: m })}</option>
+        {/each}
+      </select>
+    </div>
+  </div>
+
+  <div class="card stack">
     <h2>{t("settings.drivers")}</h2>
     {#if o?.platform === "windows"}
       <div class="driver">
