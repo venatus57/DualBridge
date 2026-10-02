@@ -1,0 +1,28 @@
+[package]
+name = "dualbridge-hid"
+description = "Controller discovery, hotplug and I/O threads for DualBridge"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[features]
+default = ["hidapi"]
+# Real devices through the hidapi C library. Without it only the mock backend
+# is available.
+hidapi = ["dep:hidapi"]
+
+[dependencies]
+dualbridge-core.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+hidapi = { version = "2.6", optional = true }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+    "Win32_System_Threading",
+    "Win32_Foundation",
+    "Win32_Devices_Bluetooth",
+    "Win32_System_IO",
+] }

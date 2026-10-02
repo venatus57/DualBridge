@@ -1,0 +1,62 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "DualBridge",
+  "version": "0.2.0",
+  "identifier": "io.github.venatus57.dualbridge",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "withGlobalTauri": false,
+    "windows": [
+      {
+        "label": "main",
+        "title": "DualBridge",
+        "width": 1120,
+        "height": 740,
+        "minWidth": 880,
+        "minHeight": 600,
+        "visible": false,
+        "center": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "dmg", "app"],
+    "publisher": "DualBridge contributors",
+    "copyright": "GPL-3.0-or-later",
+    "category": "Utility",
+    "shortDescription": "PlayStation controllers on Windows and macOS",
+    "longDescription": "Use DualShock 4 and DualSense controllers in every game, with multi-controller support and rich lightbar control.",
+    "homepage": "https://github.com/venatus57/DualBridge",
+    "license": "GPL-3.0-or-later",
+    "licenseFile": "../../LICENSE",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "resources": ["drivers/*"],
+    "windows": {
+      "nsis": {
+        "installMode": "perMachine",
+        "languages": ["English", "French"],
+        "displayLanguageSelector": true,
+        "installerHooks": "windows/hooks.nsh",
+        "installerIcon": "icons/icon.ico"
+      }
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  }
+}

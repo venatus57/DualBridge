@@ -1,0 +1,67 @@
+# Virtual controller: ViGEmBus status and alternatives
+
+Most Windows games only read XInput (Xbox) controllers. DualBridge therefore
+creates one virtual Xbox 360 controller per physical PlayStation controller.
+
+## ViGEmBus
+
+[ViGEmBus](https://github.com/nefarius/ViGEmBus) is a kernel-mode bus driver
+that emulates Xbox 360 and DualShock 4 controllers. It is what DS4Windows,
+Steam Input alternatives, and most similar tools use.
+
+- **Status:** its author retired the project in 2023. The repository is
+  archived, but the last release (v1.22.0) still installs and works on
+  Windows 10 and 11, and it is signed by Microsoft, so it loads with Secure
+  Boot enabled.
+- **License:** BSD-3-Clause, so the installer can be redistributed unmodified
+  with its license notice.
+- **Risk:** no fixes for future Windows changes. If a Windows update breaks
+  it, there is no upstream to fix it.
+
+DualBridge talks to it through the [`vigem-client`](https://crates.io/crates/vigem-client)
+crate (MIT), including rumble notifications from games.
+
+## Alternatives considered
+
+| Option | Pros | Cons |
+|---|---|---|
+| ViGEmBus (chosen) | Works everywhere today, signed, well known | Retired upstream |
+| Steam Input | No driver needed | Only for games launched through Steam |
+| Our own virtual HID driver (UMDF/KMDF) | Full control | Needs driver signing (EV certificate + Microsoft attestation), large effort |
+| Windows.Gaming.Input injection APIs | Official | Not a real XInput device; many games ignore it |
+
+The virtual controller code is isolated behind the `VirtualBackend` trait in
+`crates/dualbridge-virtual`, so another backend can be added without touching
+the rest of the app.
+
+## HidHide
+
+Games that understand PlayStation controllers would otherwise see both the
+real controller and the virtual Xbox one. [HidHide](https://github.com/nefarius/HidHide)
+is a filter driver that hides chosen devices from every application except an
+allow list. While "exclusive mode" is on (the default whenever HidHide is
+installed), DualBridge registers itself in that list and hides each
+controller it manages.
+
+HidHide only accepts configuration changes from an administrator process.
+DualBridge runs as a normal user, so it relaunches itself as a short elevated
+helper (`--hidhide-helper`, one UAC prompt) that runs `HidHideCLI.exe`
+(shipped with the driver) and exits.
+HidHide remembers hidden devices across restarts, so this happens once per
+controller (and per USB port), not at every launch. Hidden controllers stay
+hidden when DualBridge closes; turning exclusive mode off shows them again.
+
+Games launched through Steam can also get a second virtual pad from Steam
+Input. If double input remains, turn off Steam Input for PlayStation
+controllers, or for that game.
+
+TODO before 1.0: confirm HidHide's redistribution terms (the installer bundles
+it unmodified) and that its CLI flags (`--app-reg`, `--dev-hide`,
+`--dev-unhide`, `--cloak-on`) behave as expected on the bundled release.
+
+## macOS
+
+A virtual gamepad on macOS requires Apple's HID virtual device entitlement or
+a DriverKit extension, both of which need Apple's approval. Most macOS games
+already support PlayStation controllers through the Game Controller framework,
+so DualBridge focuses on lighting, battery, and profiles there.
