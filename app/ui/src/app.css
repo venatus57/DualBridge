@@ -1,0 +1,405 @@
+/*
+ * DualBridge visual language: a dark console panel lit by the controllers'
+ * lightbars. Beveled corners, a display face for titles, a mono face for
+ * numbers, and the four face-button colors as the palette.
+ */
+
+:root {
+  --bg: #07080b;
+  --bg-2: #0c0e12;
+  --panel: #101318;
+  --panel-2: #171b22;
+  --panel-3: #1e232c;
+  --line: #222731;
+  --line-2: #313846;
+  --text: #eceef3;
+  --muted: #7c8496;
+  --dim: #4b5263;
+
+  /* Face buttons. */
+  --tri: #3ef0c4;
+  --cir: #ff4f62;
+  --crs: #5c8dff;
+  --sqr: #ff6ad5;
+
+  --accent: var(--tri);
+  --accent-ink: #03140f;
+  --accent-soft: rgba(62, 240, 196, 0.12);
+  /* Follows the first controller's lightbar (set by App.svelte). */
+  --ambient: #3ef0c4;
+
+  --ok: #3ee89a;
+  --warn: #ffc23d;
+  --bad: var(--cir);
+
+  --cut: 10px;
+  --cut-sm: 6px;
+  --shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+
+  --font-display: "Chakra Petch", "Segoe UI", sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", monospace;
+
+  color-scheme: dark;
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  user-select: none;
+}
+
+#app {
+  height: 100%;
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+h1 {
+  font-size: 34px;
+  line-height: 1.05;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+h2 {
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+h3 {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+p {
+  margin: 0;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 12.5px;
+}
+
+.mono,
+.num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Beveled corners where supported (Chromium / WebView2), rounded elsewhere. */
+.bevel,
+.bevel::after,
+button,
+input[type="text"],
+select,
+.card,
+.badge {
+  corner-shape: bevel;
+}
+
+button {
+  font: inherit;
+  font-weight: 500;
+  font-size: 13px;
+  color: inherit;
+  cursor: pointer;
+  border: 1px solid var(--line-2);
+  background: var(--panel-2);
+  border-radius: var(--cut-sm);
+  padding: 7px 14px;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s,
+    box-shadow 0.2s,
+    transform 0.06s;
+}
+
+button:hover {
+  background: var(--panel-3);
+  border-color: #454d5e;
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+button:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+button.primary:hover {
+  background: #6ff5d4;
+  box-shadow: 0 0 22px -4px var(--accent);
+}
+
+button.ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+button.ghost:hover {
+  background: var(--panel-2);
+  border-color: var(--line);
+}
+
+button.danger {
+  color: var(--bad);
+}
+
+button.icon {
+  padding: 6px;
+  line-height: 0;
+}
+
+input[type="text"],
+select {
+  font: inherit;
+  color: var(--text);
+  background: var(--bg-2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--cut-sm);
+  padding: 7px 10px;
+  outline: none;
+  user-select: text;
+}
+
+input[type="text"]:focus,
+select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+select {
+  cursor: pointer;
+}
+
+option {
+  background: var(--panel);
+}
+
+.card {
+  position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 40%), var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--cut);
+  padding: 20px;
+}
+
+/* A section title with a lit tick in front. */
+.card > h2:first-child,
+.card > .row:first-child > h2,
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.card > h2:first-child::before,
+.card > .row:first-child > h2::before,
+.section-title::before {
+  content: "";
+  width: 3px;
+  height: 14px;
+  background: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.spacer {
+  flex: 1;
+}
+
+.page {
+  padding: 34px 40px 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 1240px;
+}
+
+/* Staggered entrance when a page opens. */
+.page > * {
+  animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+.page > *:nth-child(2) {
+  animation-delay: 0.05s;
+}
+.page > *:nth-child(3) {
+  animation-delay: 0.1s;
+}
+.page > *:nth-child(4) {
+  animation-delay: 0.15s;
+}
+.page > *:nth-child(n + 5) {
+  animation-delay: 0.2s;
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-end;
+  gap: 16px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--line);
+  position: relative;
+}
+
+.page-header::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 64px;
+  height: 1px;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent);
+}
+
+.page-header p {
+  margin-top: 8px;
+  max-width: 560px;
+}
+
+.kicker {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  gap: 18px;
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11.5px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-2);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.badge.ok {
+  color: var(--ok);
+  border-color: rgba(62, 232, 154, 0.35);
+  background: rgba(62, 232, 154, 0.07);
+}
+
+.badge.warn {
+  color: var(--warn);
+  border-color: rgba(255, 194, 61, 0.35);
+  background: rgba(255, 194, 61, 0.07);
+}
+
+.badge.bad {
+  color: var(--bad);
+  border-color: rgba(255, 79, 98, 0.35);
+  background: rgba(255, 79, 98, 0.07);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.field > label,
+.label {
+  font-weight: 500;
+}
+
+.hint {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.divider {
+  height: 1px;
+  background: repeating-linear-gradient(90deg, var(--line-2) 0 4px, transparent 4px 8px);
+  margin: 4px 0;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line-2);
+  border: 3px solid var(--bg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

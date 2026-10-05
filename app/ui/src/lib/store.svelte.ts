@@ -1,0 +1,139 @@
+import { api } from "./api";
+import { defaultSettings } from "./defaults";
+import { setLanguage, t } from "./i18n.svelte";
+import type { ControllerView, LightingConfig, Overview, Profile, Settings, UpdateInfo } from "./types";
+
+export type Page = "controllers" | "lighting" | "profiles" | "settings";
+
+export const app = $state({
+  ready: false,
+  overview: null as Overview | null,
+  settings: defaultSettings() as Settings,
+  controllers: [] as ControllerView[],
+  page: "controllers" as Page,
+  /** Profile being edited on the Lighting and Profiles pages. */
+  editing: "Default",
+  /** Controller (identity) whose own lighting is edited; null = the profile. */
+  lightingTarget: null as string | null,
+  wizard: false,
+  toast: null as { text: string; error: boolean } | null,
+  /** Newer release found, until installed or dismissed. */
+  update: null as UpdateInfo | null,
+  /** Download progress (0-100) while installing an update, else null. */
+  updateProgress: null as number | null,
+});
+
+const UPDATE_EVERY_MS = 6 * 60 * 60 * 1000;
+
+/** Looks for a new version. `manual` reports "up to date" and errors. */
+export async function checkForUpdate(manual = false) {
+  try {
+    const u = await api.checkUpdate();
+    app.update = u;
+    if (manual && !u) toast(t("update.upToDate"));
+  } catch (e) {
+    if (manual) toast(t("update.checkFailed", { msg: String(e) }), true);
+  }
+}
+
+export async function installUpdate() {
+  if (!app.update || app.updateProgress !== null) return;
+  app.updateProgress = 0;
+  try {
+    await api.installUpdate(app.update);
+  } catch (e) {
+    app.updateProgress = null;
+    toast(t("update.failed", { msg: String(e) }), true);
+  }
+}
+
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+export function toast(text: string, error = false) {
+  app.toast = { text, error };
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => (app.toast = null), error ? 5000 : 1500);
+}
+
+function useSettings(s: Settings) {
+  app.settings = s;
+  setLanguage(s.language);
+  if (!s.profiles.some((p) => p.name === app.editing)) app.editing = s.profiles[0].name;
+}
+
+/** Runs a settings-changing call, updating the UI or showing the error. */
+export async function change(call: Promise<Settings>, quiet = true): Promise<boolean> {
+  try {
+    useSettings(await call);
+    if (!quiet) toast(t("common.saved"));
+    return true;
+  } catch (e) {
+    toast(t("common.error", { msg: String(e) }), true);
+    return false;
+  }
+}
+
+export async function refreshOverview() {
+  const o = await api.getOverview();
+  app.overview = o;
+  app.controllers = o.controllers;
+  useSettings(o.settings);
+}
+
+export async function init() {
+  await refreshOverview();
+  app.editing = app.settings.profiles[0].name;
+  app.wizard = !app.settings.first_run_done;
+  await api.onControllers((list) => (app.controllers = list));
+  await api.onUpdateProgress((p) => (app.updateProgress = p));
+  const autoCheck = () => {
+    if (app.settings.check_updates) checkForUpdate();
+  };
+  setTimeout(autoCheck, 4000);
+  setInterval(autoCheck, UPDATE_EVERY_MS);
+  await api.onConflicts((programs) => {
+    if (app.overview) app.overview.conflicts = programs;
+  });
+  app.ready = true;
+}
+
+export function editedProfile(): Profile {
+  return app.settings.profiles.find((p) => p.name === app.editing) ?? app.settings.profiles[0];
+}
+
+// Profile edits are saved shortly after the last change, so dragging a
+// slider doesn't send hundreds of saves.
+let saveTimer: ReturnType<typeof setTimeout> | undefined;
+let pending: { profile: Profile; previous: string } | null = null;
+
+export function saveProfileSoon(profile: Profile, previousName = profile.name, delay = 150) {
+  pending = { profile: $state.snapshot(profile) as Profile, previous: pending?.previous ?? previousName };
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushProfile, delay);
+}
+
+export async function flushProfile() {
+  clearTimeout(saveTimer);
+  const p = pending;
+  pending = null;
+  if (!p) return;
+  await change(api.saveProfile(p.profile, p.previous));
+  if (p.previous === app.editing) app.editing = p.profile.name;
+}
+
+// Same debounce for a controller's own lighting.
+let lightTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingLight: { identity: string; lighting: LightingConfig } | null = null;
+
+export function saveControllerLightingSoon(identity: string, lighting: LightingConfig) {
+  pendingLight = { identity, lighting: $state.snapshot(lighting) as LightingConfig };
+  clearTimeout(lightTimer);
+  lightTimer = setTimeout(flushControllerLighting, 150);
+}
+
+export async function flushControllerLighting() {
+  clearTimeout(lightTimer);
+  const p = pendingLight;
+  pendingLight = null;
+  if (p) await change(api.setControllerLighting(p.identity, p.lighting));
+}

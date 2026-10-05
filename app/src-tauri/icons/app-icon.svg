@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2F6BFF"/>
+      <stop offset="1" stop-color="#8B3DFF"/>
+    </linearGradient>
+    <linearGradient id="bar" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5CF2FF"/>
+      <stop offset="0.5" stop-color="#FF5CD6"/>
+      <stop offset="1" stop-color="#FFD35C"/>
+    </linearGradient>
+  </defs>
+  <rect x="32" y="32" width="960" height="960" rx="220" fill="url(#bg)"/>
+  <!-- gamepad body -->
+  <path d="M300 330 h424 c92 0 150 60 172 170 l40 200 c18 92 -40 150 -110 150 c-52 0 -86 -30 -118 -84 l-40 -66 H356 l-40 66 c-32 54 -66 84 -118 84 c-70 0 -128 -58 -110 -150 l40 -200 c22 -110 80 -170 172 -170 z" fill="#FFFFFF"/>
+  <!-- lightbar -->
+  <rect x="392" y="360" width="240" height="34" rx="17" fill="url(#bar)"/>
+  <!-- D-pad -->
+  <rect x="250" y="470" width="44" height="130" rx="10" fill="#3A4BD8"/>
+  <rect x="207" y="513" width="130" height="44" rx="10" fill="#3A4BD8"/>
+  <!-- face buttons -->
+  <circle cx="770" cy="480" r="26" fill="#3A4BD8"/>
+  <circle cx="770" cy="590" r="26" fill="#3A4BD8"/>
+  <circle cx="715" cy="535" r="26" fill="#3A4BD8"/>
+  <circle cx="825" cy="535" r="26" fill="#3A4BD8"/>
+  <!-- sticks -->
+  <circle cx="420" cy="620" r="46" fill="#5B67E8"/>
+  <circle cx="604" cy="620" r="46" fill="#5B67E8"/>
+</svg>

@@ -1,0 +1,13 @@
+[package]
+name = "dualbridge-core"
+description = "Controller protocols, lighting engine and mapping for DualBridge (no OS dependencies)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
